@@ -169,7 +169,7 @@ export default function PublicCambioClient({
   const hasSelection = selectedReceive.size > 0 || selectedGive.size > 0;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-zinc-950 px-4 py-6">
+    <div className="min-h-screen bg-gray-50 dark:bg-zinc-950 px-4 py-6 pb-28">
       <div className="max-w-sm mx-auto">
 
         {/* Header */}
@@ -286,28 +286,6 @@ export default function PublicCambioClient({
               )}
             </div>
 
-            {/* Confirm button */}
-            {hasSelection && (
-              <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4">
-                <div className="flex gap-3 text-xs text-zinc-500 dark:text-zinc-400 mb-3">
-                  {selectedReceive.size > 0 && (
-                    <span>+{selectedReceive.size} recibís</span>
-                  )}
-                  {selectedReceive.size > 0 && selectedGive.size > 0 && <span>·</span>}
-                  {selectedGive.size > 0 && (
-                    <span>−{selectedGive.size} das</span>
-                  )}
-                </div>
-                <button
-                  onClick={handleConfirm}
-                  disabled={confirming}
-                  className="w-full py-3 rounded-xl bg-[#00B8D4] text-white font-bold text-sm disabled:opacity-50"
-                >
-                  {confirming ? 'Confirmando…' : '🔄 Confirmar cambio'}
-                </button>
-              </div>
-            )}
-
             {done && (
               <div className="bg-green-50 dark:bg-green-900/20 rounded-2xl px-4 py-3 mb-4">
                 <p className="text-sm text-green-700 dark:text-green-400 font-semibold">
@@ -363,6 +341,28 @@ export default function PublicCambioClient({
               </div>
             </div>
           </>
+        )}
+
+        {/* Sticky confirm bar */}
+        {isViewer && hasSelection && (
+          <div className="fixed bottom-0 left-0 right-0 z-50 flex justify-center pointer-events-none">
+            <div className="w-full max-w-sm px-4 pb-6 pointer-events-auto">
+              <div className="bg-white dark:bg-zinc-900 rounded-2xl p-3 shadow-[0_-4px_24px_rgba(0,0,0,0.12)] flex items-center gap-3">
+                <div className="flex-1 text-xs text-zinc-500 dark:text-zinc-400 leading-tight">
+                  {selectedReceive.size > 0 && <span className="text-[#00B8D4] font-semibold">+{selectedReceive.size} recibís</span>}
+                  {selectedReceive.size > 0 && selectedGive.size > 0 && <span className="mx-1">·</span>}
+                  {selectedGive.size > 0 && <span className="text-violet-500 font-semibold">−{selectedGive.size} das</span>}
+                </div>
+                <button
+                  onClick={handleConfirm}
+                  disabled={confirming}
+                  className="px-5 py-2.5 rounded-xl bg-[#00B8D4] text-white font-bold text-sm disabled:opacity-50 flex-shrink-0"
+                >
+                  {confirming ? 'Confirmando…' : '🔄 Confirmar'}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Footer CTA */}
