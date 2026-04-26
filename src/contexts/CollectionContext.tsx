@@ -98,7 +98,7 @@ export function CollectionProvider({
         clearTimeout(pendingRef.current[entry.sticker_num]);
       }
       pendingRef.current[entry.sticker_num] = setTimeout(async () => {
-        await supabase.from('collection').upsert(
+        const { error } = await supabase.from('collection').upsert(
           {
             user_id: userId,
             sticker_num: entry.sticker_num,
@@ -106,10 +106,10 @@ export function CollectionProvider({
             history_taps: entry.history_taps,
             max_dups: entry.max_dups,
             is_favorite: entry.is_favorite,
-            updated_at: new Date().toISOString(),
           },
           { onConflict: 'user_id,sticker_num' }
         );
+        if (error) console.error('[upsert error]', error.code, error.message, error.details);
       }, 400);
     },
     [userId, supabase]
@@ -176,7 +176,7 @@ export function CollectionProvider({
       });
       updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
       await supabase.from('collection').upsert(
-        updates.map((e) => ({ user_id: userId, ...e, updated_at: new Date().toISOString() })),
+        updates.map((e) => ({ user_id: userId, ...e })),
         { onConflict: 'user_id,sticker_num' }
       );
     },
@@ -197,7 +197,7 @@ export function CollectionProvider({
       })) as CollectionEntry[];
       updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
       await supabase.from('collection').upsert(
-        updates.map((e) => ({ user_id: userId, ...e, updated_at: new Date().toISOString() })),
+        updates.map((e) => ({ user_id: userId, ...e })),
         { onConflict: 'user_id,sticker_num' }
       );
     },
@@ -228,7 +228,6 @@ export function CollectionProvider({
         updates.slice(i, i + CHUNK).map((e) => ({
           user_id: userId,
           ...e,
-          updated_at: new Date().toISOString(),
         })),
         { onConflict: 'user_id,sticker_num' }
       );
