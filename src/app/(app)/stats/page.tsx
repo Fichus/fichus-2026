@@ -2,13 +2,14 @@
 import React, { useMemo, useState } from 'react';
 import { useCollection } from '@/contexts/CollectionContext';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import GuestLock from '@/components/GuestLock';
 import { ALL_STICKERS, GROUPS, STICKER_MAP, EXTRA_PLAYERS } from '@/lib/stickers';
 
 const GROUP_KEYS = Object.keys(GROUPS);
 const EXTRA_TOTAL = EXTRA_PLAYERS.length * 4;
 
 export default function StatsPage() {
-  const { collection, clearStats } = useCollection();
+  const { collection, clearStats, isGuest } = useCollection();
   const [confirmClearTaps, setConfirmClearTaps] = useState(false);
 
   // ── Overview stats ──────────────────────────────────────────────────────────
@@ -99,6 +100,16 @@ export default function StatsPage() {
   }
 
   const maxPct = Math.max(...groupStats.map((g) => g.pct), 0.01);
+
+  if (isGuest) {
+    return (
+      <GuestLock>
+        <div className="px-3 pt-4 pb-4">
+          <h1 className="text-lg font-bold text-zinc-900 dark:text-white mb-4 px-1">📊 Estadísticas</h1>
+        </div>
+      </GuestLock>
+    );
+  }
 
   return (
     <div className="px-3 pt-4 pb-4">

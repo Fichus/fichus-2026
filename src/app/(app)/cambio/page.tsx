@@ -2,11 +2,12 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useCollection } from '@/contexts/CollectionContext';
+import GuestLock from '@/components/GuestLock';
 import { createClient } from '@/lib/supabase/client';
 import { ALL_STICKERS, STICKER_MAP } from '@/lib/stickers';
 
 export default function CambioPage() {
-  const { collection } = useCollection();
+  const { collection, isGuest } = useCollection();
   const [userId, setUserId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const supabase = createClient();
@@ -40,6 +41,16 @@ export default function CambioPage() {
       setTimeout(() => setCopied(false), 2000);
     });
   };
+
+  if (isGuest) {
+    return (
+      <GuestLock>
+        <div className="px-4 pt-4 pb-4">
+          <h1 className="text-lg font-bold text-zinc-900 dark:text-white mb-4">🔄 Mi Cambio</h1>
+        </div>
+      </GuestLock>
+    );
+  }
 
   return (
     <div className="px-4 pt-4 pb-4">

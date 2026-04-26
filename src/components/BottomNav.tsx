@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useCollection } from '@/contexts/CollectionContext';
 
 function IconAlbum() {
   return (
@@ -60,34 +61,41 @@ function IconConfig() {
 }
 
 const TABS = [
-  { href: '/album', label: 'Álbum', Icon: IconAlbum },
-  { href: '/especiales', label: 'Especiales', Icon: IconEspeciales },
-  { href: '/favoritas', label: 'Favoritas', Icon: IconFavoritas },
-  { href: '/stats', label: 'Stats', Icon: IconStats },
-  { href: '/cambio', label: 'Cambio', Icon: IconCambio },
-  { href: '/config', label: 'Config', Icon: IconConfig },
+  { href: '/album',     label: 'Álbum',     Icon: IconAlbum,     locked: false },
+  { href: '/especiales',label: 'Especiales',Icon: IconEspeciales, locked: true  },
+  { href: '/favoritas', label: 'Favoritas', Icon: IconFavoritas,  locked: false },
+  { href: '/stats',     label: 'Stats',     Icon: IconStats,      locked: true  },
+  { href: '/cambio',    label: 'Cambio',    Icon: IconCambio,     locked: true  },
+  { href: '/config',    label: 'Config',    Icon: IconConfig,     locked: false },
 ];
 
 export default function BottomNav() {
   const pathname = usePathname();
+  const { isGuest } = useCollection();
 
   return (
     <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] z-30 bg-white/95 dark:bg-zinc-950/95 backdrop-blur border-t border-zinc-200 dark:border-zinc-800 pb-safe">
       <div className="flex h-16">
         {TABS.map((tab) => {
           const active = pathname === tab.href || pathname.startsWith(tab.href + '/');
+          const showLock = isGuest && tab.locked;
           return (
             <Link
               key={tab.href}
               href={tab.href}
-              className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${
+              className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors relative ${
                 active
                   ? 'text-[#00B8D4]'
+                  : showLock
+                  ? 'text-zinc-300 dark:text-zinc-700'
                   : 'text-zinc-400 dark:text-zinc-500'
               }`}
             >
               <tab.Icon />
               <span>{tab.label}</span>
+              {showLock && (
+                <span className="absolute top-2 right-[calc(50%-14px)] text-[8px] leading-none">🔒</span>
+              )}
             </Link>
           );
         })}

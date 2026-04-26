@@ -1,12 +1,23 @@
 'use client';
 import React from 'react';
 import StickerCard from '@/components/StickerCard';
+import GuestLock from '@/components/GuestLock';
 import { getExtraStickers, EXTRA_PLAYERS, EXTRA_VARIANTS } from '@/lib/stickers';
 import { useCollection } from '@/contexts/CollectionContext';
 
 export default function EspecialesPage() {
-  const { getCount } = useCollection();
+  const { getCount, isGuest } = useCollection();
   const allExtras = getExtraStickers();
+
+  if (isGuest) {
+    return (
+      <GuestLock>
+        <div className="px-3 pt-4">
+          <h1 className="text-lg font-bold text-zinc-900 dark:text-white mb-4">⭐ Extrastickers</h1>
+        </div>
+      </GuestLock>
+    );
+  }
 
   return (
     <div className="px-3 pt-4">

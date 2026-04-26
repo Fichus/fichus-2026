@@ -12,6 +12,8 @@ import { createClient } from '@/lib/supabase/client';
 import type { CollectionEntry } from '@/lib/types';
 import { ALL_STICKERS, getTeamStickers } from '@/lib/stickers';
 
+const GUEST_KEY = 'guest_collection';
+
 type CollectionState = Record<string, CollectionEntry>;
 
 type Action =
@@ -35,6 +37,7 @@ function reducer(state: CollectionState, action: Action): CollectionState {
 interface CollectionContextType {
   collection: CollectionState;
   loading: boolean;
+  isGuest: boolean;
   addSticker: (code: string) => void;
   removeSticker: (code: string) => void;
   toggleFavorite: (code: string) => void;
@@ -58,16 +61,28 @@ export function CollectionProvider({
   userId,
 }: {
   children: React.ReactNode;
-  userId: string;
+  userId: string | null;
 }) {
   const [collection, dispatch] = useReducer(reducer, {});
   const [loading, setLoading] = useState(true);
+  const isGuest = !userId;
   const supabase = createClient();
-  // Track pending upserts to debounce rapid taps
   const pendingRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
-  // Load collection on mount
+  // ── Load collection on mount ─────────────────────────────────────────────
   useEffect(() => {
+    if (isGuest) {
+      try {
+        const raw = localStorage.getItem(GUEST_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as CollectionEntry[];
+          if (Array.isArray(parsed)) dispatch({ type: 'LOAD', payload: parsed });
+        }
+      } catch {}
+      setLoading(false);
+      return;
+    }
+
     const load = async () => {
       const { data } = await supabase
         .from('collection')
@@ -78,7 +93,6 @@ export function CollectionProvider({
     };
     load();
 
-    // Realtime subscription
     const channel = supabase
       .channel(`collection:${userId}`)
       .on(
@@ -92,32 +106,33 @@ export function CollectionProvider({
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Persist guest collection to localStorage on every change ─────────────
+  useEffect(() => {
+    if (!isGuest || loading) return;
+    try {
+      localStorage.setItem(GUEST_KEY, JSON.stringify(Object.values(collection)));
+    } catch {}
+  }, [collection, isGuest, loading]);
+
+  // ── Sync a single entry to Supabase (no-op for guests) ───────────────────
   const syncEntry = useCallback(
     (entry: CollectionEntry) => {
+      if (isGuest) return; // guest: persisted by useEffect above
       if (pendingRef.current[entry.sticker_num]) {
         clearTimeout(pendingRef.current[entry.sticker_num]);
       }
       pendingRef.current[entry.sticker_num] = setTimeout(async () => {
         const { error } = await supabase.from('collection').upsert(
-          {
-            user_id: userId,
-            sticker_num: entry.sticker_num,
-            count: entry.count,
-            history_taps: entry.history_taps,
-            max_dups: entry.max_dups,
-            is_favorite: entry.is_favorite,
-          },
+          { user_id: userId, ...entry },
           { onConflict: 'user_id,sticker_num' }
         );
         if (error) console.error('[upsert error]', error.code, error.message, error.details);
       }, 400);
     },
-    [userId, supabase]
+    [userId, supabase, isGuest]
   );
 
   const addSticker = useCallback(
@@ -141,8 +156,7 @@ export function CollectionProvider({
     (code: string) => {
       const cur = collection[code];
       if (!cur || cur.count <= 0) return;
-      const newCount = cur.count - 1;
-      const newEntry: CollectionEntry = { ...cur, count: newCount };
+      const newEntry: CollectionEntry = { ...cur, count: cur.count - 1 };
       dispatch({ type: 'SET', payload: newEntry });
       syncEntry(newEntry);
     },
@@ -180,12 +194,13 @@ export function CollectionProvider({
         };
       });
       updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
+      if (isGuest) return;
       await supabase.from('collection').upsert(
         updates.map((e) => ({ user_id: userId, ...e })),
         { onConflict: 'user_id,sticker_num' }
       );
     },
-    [collection, userId, supabase]
+    [collection, userId, supabase, isGuest]
   );
 
   const completeCodes = useCallback(
@@ -202,12 +217,13 @@ export function CollectionProvider({
         };
       });
       updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
+      if (isGuest) return;
       await supabase.from('collection').upsert(
         updates.map((e) => ({ user_id: userId, ...e })),
         { onConflict: 'user_id,sticker_num' }
       );
     },
-    [collection, userId, supabase]
+    [collection, userId, supabase, isGuest]
   );
 
   const clearCodes = useCallback(
@@ -218,37 +234,34 @@ export function CollectionProvider({
         count: 0,
       })) as CollectionEntry[];
       updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
+      if (isGuest) return;
       await supabase.from('collection').upsert(
         updates.map((e) => ({ user_id: userId, ...e })),
         { onConflict: 'user_id,sticker_num' }
       );
     },
-    [collection, userId, supabase]
+    [collection, userId, supabase, isGuest]
   );
 
   const clearTeam = useCallback(
     async (teamCode: string) => {
       const teamStickers = getTeamStickers(teamCode);
       const updates: CollectionEntry[] = teamStickers.map((s) => ({
-        ...(collection[s.code] ?? {
-          history_taps: 0,
-          max_dups: 0,
-          is_favorite: false,
-        }),
+        ...(collection[s.code] ?? { history_taps: 0, max_dups: 0, is_favorite: false }),
         sticker_num: s.code,
         count: 0,
       })) as CollectionEntry[];
       updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
+      if (isGuest) return;
       await supabase.from('collection').upsert(
         updates.map((e) => ({ user_id: userId, ...e })),
         { onConflict: 'user_id,sticker_num' }
       );
     },
-    [collection, userId, supabase]
+    [collection, userId, supabase, isGuest]
   );
 
   const clearAll = useCallback(async () => {
-    // Reset counts but KEEP history_taps (so "más tocadas" ranking persists)
     const updates = Object.values(collection).map((e) => ({
       ...e,
       count: 0,
@@ -256,6 +269,7 @@ export function CollectionProvider({
       is_favorite: false,
     }));
     dispatch({ type: 'LOAD', payload: updates });
+    if (isGuest) return;
     const CHUNK = 500;
     for (let i = 0; i < updates.length; i += CHUNK) {
       await supabase.from('collection').upsert(
@@ -263,7 +277,7 @@ export function CollectionProvider({
         { onConflict: 'user_id,sticker_num' }
       );
     }
-  }, [collection, userId, supabase]);
+  }, [collection, userId, supabase, isGuest]);
 
   const completeAll = useCallback(async () => {
     const updates: CollectionEntry[] = ALL_STICKERS.map((s) => {
@@ -278,17 +292,15 @@ export function CollectionProvider({
       };
     });
     updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
+    if (isGuest) return;
     const CHUNK = 500;
     for (let i = 0; i < updates.length; i += CHUNK) {
       await supabase.from('collection').upsert(
-        updates.slice(i, i + CHUNK).map((e) => ({
-          user_id: userId,
-          ...e,
-        })),
+        updates.slice(i, i + CHUNK).map((e) => ({ user_id: userId, ...e })),
         { onConflict: 'user_id,sticker_num' }
       );
     }
-  }, [collection, userId, supabase]);
+  }, [collection, userId, supabase, isGuest]);
 
   const addOneAll = useCallback(async () => {
     const updates: CollectionEntry[] = ALL_STICKERS.map((s) => {
@@ -303,6 +315,7 @@ export function CollectionProvider({
       };
     });
     updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
+    if (isGuest) return;
     const CHUNK = 500;
     for (let i = 0; i < updates.length; i += CHUNK) {
       await supabase.from('collection').upsert(
@@ -310,13 +323,14 @@ export function CollectionProvider({
         { onConflict: 'user_id,sticker_num' }
       );
     }
-  }, [collection, userId, supabase]);
+  }, [collection, userId, supabase, isGuest]);
 
   const removeOneAll = useCallback(async () => {
     const updates: CollectionEntry[] = Object.values(collection)
       .filter((e) => e.count > 0)
       .map((e) => ({ ...e, count: e.count - 1 }));
     updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
+    if (isGuest) return;
     const CHUNK = 500;
     for (let i = 0; i < updates.length; i += CHUNK) {
       await supabase.from('collection').upsert(
@@ -324,15 +338,15 @@ export function CollectionProvider({
         { onConflict: 'user_id,sticker_num' }
       );
     }
-  }, [collection, userId, supabase]);
+  }, [collection, userId, supabase, isGuest]);
 
   const clearStats = useCallback(async () => {
-    // Only reset history_taps — max_dups reflects the current album state
     const updates = Object.values(collection).map((e) => ({
       ...e,
       history_taps: 0,
     }));
     updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
+    if (isGuest) return;
     const CHUNK = 500;
     for (let i = 0; i < updates.length; i += CHUNK) {
       await supabase.from('collection').upsert(
@@ -340,7 +354,7 @@ export function CollectionProvider({
         { onConflict: 'user_id,sticker_num' }
       );
     }
-  }, [collection, userId, supabase]);
+  }, [collection, userId, supabase, isGuest]);
 
   const getCount = useCallback((code: string) => collection[code]?.count ?? 0, [collection]);
   const isFavorite = useCallback(
@@ -353,6 +367,7 @@ export function CollectionProvider({
       value={{
         collection,
         loading,
+        isGuest,
         addSticker,
         removeSticker,
         toggleFavorite,

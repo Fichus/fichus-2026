@@ -44,6 +44,7 @@ const COUNTRIES = [
 
 export default function Onboarding() {
   const [show, setShow] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [step, setStep] = useState(0);
   const [showSetup, setShowSetup] = useState(false);
   const [username, setUsername] = useState('');
@@ -52,13 +53,27 @@ export default function Onboarding() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && !localStorage.getItem('hasSeenOnboarding')) {
-      setShow(true);
-    }
+    const check = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // Logged in: show if user hasn't seen onboarding in this account
+        setIsLoggedIn(true);
+        if (!user.user_metadata?.hasSeenOnboarding) setShow(true);
+      } else {
+        // Guest: show if not seen in this browser
+        if (!localStorage.getItem('hasSeenOnboarding')) setShow(true);
+      }
+    };
+    check();
   }, []);
 
-  const finish = () => {
-    localStorage.setItem('hasSeenOnboarding', 'true');
+  const finish = async () => {
+    if (isLoggedIn) {
+      const supabase = createClient();
+      await supabase.auth.updateUser({ data: { hasSeenOnboarding: true } });
+    }
+    try { localStorage.setItem('hasSeenOnboarding', 'true'); } catch {}
     setShow(false);
   };
 
@@ -231,10 +246,10 @@ export default function Onboarding() {
             </button>
           )}
           <button
-            onClick={isLast ? () => setShowSetup(true) : () => setStep(step + 1)}
+            onClick={isLast ? (isLoggedIn ? () => setShowSetup(true) : finish) : () => setStep(step + 1)}
             className={`py-3 rounded-xl text-sm font-bold ${isLast ? 'flex-1 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400' : 'flex-[2] bg-[#00B8D4] text-white'}`}
           >
-            {isLast ? 'Continuar →' : 'Siguiente →'}
+            {isLast ? (isLoggedIn ? 'Continuar →' : 'Empezar →') : 'Siguiente →'}
           </button>
         </div>
       </div>
