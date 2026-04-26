@@ -16,9 +16,11 @@ export default function CambioPage() {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const tradeUrl = userId
-    ? `${typeof window !== 'undefined' ? window.location.origin : ''}/cambio/${userId}`
-    : '';
+  const siteOrigin =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (typeof window !== 'undefined' ? window.location.origin : '');
+
+  const tradeUrl = userId ? `${siteOrigin}/cambio/${userId}` : '';
 
   // Stickers with more than 1 copy → tradeable (count - 1 extras)
   const myDuplicates = useMemo(() => {

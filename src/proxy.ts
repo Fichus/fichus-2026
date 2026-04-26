@@ -29,28 +29,19 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // Public routes that don't need auth
-  const isPublic =
-    pathname.startsWith('/login') ||
-    pathname.startsWith('/register') ||
-    pathname.startsWith('/cambio/') ||
-    pathname.startsWith('/auth/') ||
-    pathname.startsWith('/_next') ||
-    pathname.includes('.');
+  // Routes that require auth (everything else is guest-accessible)
+  const isAuthOnly =
+    pathname.startsWith('/auth/') === false &&
+    false; // All app routes are now guest-accessible; lock is handled in-component
 
-  // Redirect unauthenticated users to login
-  if (!user && !isPublic) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/login';
-    return NextResponse.redirect(url);
-  }
-
-  // Redirect authenticated users away from auth pages
+  // Auth pages — redirect logged-in users to album
   if (user && (pathname === '/login' || pathname === '/register' || pathname === '/')) {
     const url = request.nextUrl.clone();
     url.pathname = '/album';
     return NextResponse.redirect(url);
   }
+
+  void isAuthOnly; // suppress unused warning
 
   return supabaseResponse;
 }
