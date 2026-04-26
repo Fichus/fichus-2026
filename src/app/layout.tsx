@@ -31,7 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="manifest" href="/manifest.json" />
         <meta name="mobile-web-app-capable" content="yes" />
         <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5753007351043490"
-         crossorigin="anonymous"></script>
+         crossOrigin="anonymous"></script>
       </head>
       <body className={`${geist.variable} bg-zinc-300 dark:bg-zinc-800`}>
         <ThemeProvider>
