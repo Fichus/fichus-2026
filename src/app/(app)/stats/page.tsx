@@ -140,8 +140,8 @@ export default function StatsPage() {
 
       {/* Top 8 rankings — side by side */}
       <div className="grid grid-cols-2 gap-2.5 mb-4">
-        <RankingBlock title="🔥 Más tocadas" entries={topTapped} valueKey="history_taps" color="text-[#00B8D4]" getName={stickerName} getSub={stickerSub} />
-        <RankingBlock title="📦 Más repetidas" entries={topDups} valueKey="max_dups" color="text-violet-500" getName={stickerName} getSub={stickerSub} />
+        <RankingBlock title="🔥 Más tocadas" subtitle="Histórico total de toques" entries={topTapped} valueKey="history_taps" color="text-[#00B8D4]" getName={stickerName} getSub={stickerSub} />
+        <RankingBlock title="📦 Más repetidas" subtitle="Repetidas que tenés ahora" entries={topDups} valueKey="max_dups" color="text-violet-500" getName={stickerName} getSub={stickerSub} />
       </div>
 
       {/* Vertical group chart */}
@@ -177,7 +177,7 @@ function StatBlock({ value, label, color }: { value: number; label: string; colo
   return (
     <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm">
       <p className={`text-3xl font-black ${color}`}>{value.toLocaleString()}</p>
-      <p className="text-[11px] text-zinc-400 mt-0.5 leading-tight">{label}</p>
+      <p className="text-[13px] text-zinc-400 mt-0.5 leading-tight">{label}</p>
     </div>
   );
 }
@@ -185,9 +185,10 @@ function StatBlock({ value, label, color }: { value: number; label: string; colo
 type Entry = { sticker_num: string; history_taps: number; max_dups: number; info?: ReturnType<typeof STICKER_MAP.get> };
 
 function RankingBlock({
-  title, entries, valueKey, color, getName, getSub,
+  title, subtitle, entries, valueKey, color, getName, getSub,
 }: {
   title: string;
+  subtitle: string;
   entries: Entry[];
   valueKey: 'history_taps' | 'max_dups';
   color: string;
@@ -196,23 +197,24 @@ function RankingBlock({
 }) {
   return (
     <div className="bg-white dark:bg-zinc-900 rounded-2xl p-3 shadow-sm">
-      <h2 className="font-bold text-xs text-zinc-800 dark:text-zinc-100 mb-2">{title}</h2>
+      <h2 className="font-bold text-[13px] text-zinc-800 dark:text-zinc-100 leading-tight">{title}</h2>
+      <p className="text-[11px] text-zinc-400 mb-2 leading-tight">{subtitle}</p>
       {entries.length === 0 ? (
-        <p className="text-[10px] text-zinc-400">Sin datos</p>
+        <p className="text-[13px] text-zinc-400">Sin datos</p>
       ) : (
         <div className="flex flex-col gap-1.5">
           {entries.map((e, i) => (
             <div key={e.sticker_num} className="flex items-start gap-1.5">
-              <span className="text-[9px] font-bold text-zinc-400 w-3 mt-0.5 shrink-0">{i + 1}</span>
+              <span className="text-[11px] font-bold text-zinc-400 w-3 mt-0.5 shrink-0">{i + 1}</span>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-semibold text-zinc-800 dark:text-zinc-100 leading-tight truncate">
+                <p className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100 leading-tight truncate">
                   {getName(e)}
                 </p>
-                <p className="text-[9px] text-zinc-400 leading-tight truncate">
+                <p className="text-[11px] text-zinc-400 leading-tight truncate">
                   {e.sticker_num}{getSub(e) ? ` · ${getSub(e)}` : ''}
                 </p>
               </div>
-              <span className={`text-xs font-bold shrink-0 ${color}`}>{e[valueKey]}</span>
+              <span className={`text-[13px] font-bold shrink-0 ${color}`}>{e[valueKey]}</span>
             </div>
           ))}
         </div>

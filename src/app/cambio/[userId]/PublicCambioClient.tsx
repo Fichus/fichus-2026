@@ -10,6 +10,7 @@ interface Props {
   isViewer: boolean;
   targetOwned: number;
   targetTotal: number;
+  targetUsername: string | null;
 }
 
 export default function PublicCambioClient({
@@ -19,13 +20,14 @@ export default function PublicCambioClient({
   isViewer,
   targetOwned,
   targetTotal,
+  targetUsername,
 }: Props) {
   const regularStickers = useMemo(
     () => ALL_STICKERS.filter((s) => s.section !== 'extra'),
     []
   );
 
-  // "Yo tengo, te faltan": target has duplicates that viewer is missing
+  // "Te sirven": target has duplicates that viewer is missing
   const theyHaveViewerNeeds = useMemo(() => {
     if (!isViewer) return [];
     return regularStickers.filter((s) => {
@@ -35,7 +37,7 @@ export default function PublicCambioClient({
     });
   }, [isViewer, regularStickers, targetCollection, viewerCollection]);
 
-  // "Me faltan, vos tenés": viewer is missing what target has duplicates of
+  // "Le sirven": viewer has duplicates that target is missing
   const viewerNeedsTheyHave = useMemo(() => {
     if (!isViewer) return [];
     return regularStickers.filter((s) => {
@@ -57,6 +59,7 @@ export default function PublicCambioClient({
   }, [isViewer, regularStickers, targetCollection]);
 
   const pct = targetTotal > 0 ? Math.round((targetOwned / targetTotal) * 100) : 0;
+  const displayName = targetUsername || 'este usuario';
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-zinc-950 px-4 py-6">
@@ -73,7 +76,9 @@ export default function PublicCambioClient({
         <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4">
           <div className="flex items-center justify-between mb-2">
             <p className="text-sm font-bold text-zinc-800 dark:text-zinc-100">
-              Colección del usuario
+              Colección de {targetUsername
+                ? <span className="text-[#00B8D4]">{targetUsername}</span>
+                : 'este usuario'}
             </p>
             <span className="text-lg font-black text-[#00B8D4]">{pct}%</span>
           </div>
@@ -88,13 +93,13 @@ export default function PublicCambioClient({
 
         {isViewer ? (
           <>
-            {/* They have, you need */}
+            {/* Te sirven */}
             <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4">
               <h2 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 mb-1">
-                Él/ella tiene, a vos te faltan
+                Te sirven
               </h2>
               <p className="text-xs text-zinc-400 mb-3">
-                Sus repetidas que a vos te faltan ({theyHaveViewerNeeds.length})
+                Repetidas de {displayName} que a vos te faltan ({theyHaveViewerNeeds.length})
               </p>
               {theyHaveViewerNeeds.length === 0 ? (
                 <p className="text-xs text-zinc-400">Ninguna en común 🤷</p>
@@ -112,13 +117,13 @@ export default function PublicCambioClient({
               )}
             </div>
 
-            {/* You have, they need */}
+            {/* Le sirven */}
             <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4">
               <h2 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 mb-1">
-                A él/ella le faltan, vos tenés
+                Le sirven
               </h2>
               <p className="text-xs text-zinc-400 mb-3">
-                Tus repetidas que a él/ella le faltan ({viewerNeedsTheyHave.length})
+                Tus repetidas que le faltan a {displayName} ({viewerNeedsTheyHave.length})
               </p>
               {viewerNeedsTheyHave.length === 0 ? (
                 <p className="text-xs text-zinc-400">Ninguna en común 🤷</p>
@@ -141,10 +146,10 @@ export default function PublicCambioClient({
             {/* Not logged in: show target's duplicates & missing */}
             <div className="bg-amber-50 dark:bg-amber-900/20 rounded-2xl p-4 mb-4">
               <p className="text-sm text-amber-700 dark:text-amber-300 font-medium">
-                💡 Iniciá sesión para ver qué podés intercambiar con esta persona
+                💡 Iniciá sesión para ver qué podés intercambiar con {displayName}
               </p>
               <Link
-                href="/login"
+                href={`/login?next=/cambio/${targetUserId}`}
                 className="mt-2 inline-block px-4 py-2 rounded-xl bg-[#00B8D4] text-white text-sm font-semibold"
               >
                 Iniciar sesión
@@ -184,13 +189,6 @@ export default function PublicCambioClient({
             </div>
           </>
         )}
-
-        <Link
-          href="/"
-          className="block text-center text-xs text-zinc-400 py-4"
-        >
-          Fichus2026 — Descargá la app 📱
-        </Link>
       </div>
     </div>
   );

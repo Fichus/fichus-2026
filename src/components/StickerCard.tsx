@@ -164,15 +164,15 @@ function StickerCard({ sticker }: Props) {
         onPointerUp={handlePointerUp}
         onClick={handleClick}
       >
-        {/* Fav star — top-left */}
+        {/* Fav heart — top-left */}
         <button
-          className="absolute top-1 left-1.5 leading-none z-10 text-base"
+          className="absolute top-1 left-1.5 leading-none z-10 text-lg"
           onClick={(e) => { e.stopPropagation(); toggleFavorite(sticker.code); }}
           aria-label="Favorita"
         >
           {favorite
-            ? <span className="text-yellow-400">★</span>
-            : <span className={isOwned ? 'opacity-40 ' + textMain : 'text-zinc-400 dark:text-zinc-500'}>☆</span>
+            ? <span className="text-red-400">♥</span>
+            : <span className={isOwned ? 'opacity-60 ' + textMain : 'text-zinc-300 dark:text-zinc-600'}>♡</span>
           }
         </button>
 
@@ -189,7 +189,7 @@ function StickerCard({ sticker }: Props) {
             {mainLabel}
           </span>
           {subLabel && (
-            <span className={`text-[10px] leading-tight text-center ${textSub}`}>
+            <span className={`text-[13px] leading-tight text-center ${textSub}`}>
               {subLabel}
             </span>
           )}

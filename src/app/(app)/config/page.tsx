@@ -20,9 +20,9 @@ export default function ConfigPage() {
   const [passwordMsg, setPasswordMsg] = useState('');
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
-  const [confirm, setConfirm] = useState<'clearAll' | 'completeAll' | null>(null);
+  const [confirm, setConfirm] = useState<'clearAll' | 'completeAll' | 'clearStats' | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const { clearAll, completeAll, collection } = useCollection();
+  const { clearAll, completeAll, clearStats, collection } = useCollection();
   const router = useRouter();
   const supabase = createClient();
 
@@ -46,6 +46,11 @@ export default function ConfigPage() {
     setDisplayNameSaving(true);
     setDisplayNameMsg('');
     const { error } = await supabase.auth.updateUser({ data: { display_name: displayName } });
+    // Also sync to profiles table so cambio page can show the name
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from('profiles').upsert({ id: user.id, username: displayName }, { onConflict: 'id' });
+    }
     setDisplayNameSaving(false);
     setDisplayNameMsg(error ? 'Error al guardar.' : '¡Guardado!');
     setTimeout(() => setDisplayNameMsg(''), 2500);
@@ -248,7 +253,7 @@ export default function ConfigPage() {
           <p>👆 <strong>Tocar una figurita</strong> suma 1 unidad.</p>
           <p>👆 <strong>Mantener apretado</strong> abre el detalle de la figurita con más opciones.</p>
           <p>➕ <strong>Botón +</strong> agrega, <strong>−</strong> resta.</p>
-          <p>☆ <strong>Estrella</strong> (arriba izquierda) marca como favorita.</p>
+          <p>♡ <strong>Corazón</strong> (arriba izquierda) marca como favorita.</p>
           <p>🔢 <strong>Badge ×N</strong> (arriba derecha) indica cuántas repetidas tenés.</p>
           <p>✓ <strong>Completar equipo</strong> marca 1 en todas las figuritas faltantes del equipo.</p>
           <p>✕ <strong>Vaciar equipo</strong> pone 0 a todas las figuritas del equipo.</p>
@@ -353,14 +358,17 @@ export default function ConfigPage() {
       {/* Album actions */}
       <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4">
         <h2 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 mb-3">Álbum</h2>
-        <div className="flex gap-2">
+        <div className="flex gap-2 mb-2">
           <button onClick={() => setConfirm('completeAll')} className="flex-1 py-2.5 rounded-xl bg-[#00B8D4]/10 text-[#00B8D4] font-medium text-sm">
             ✓ Completar todo
           </button>
           <button onClick={() => setConfirm('clearAll')} className="flex-1 py-2.5 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-500 font-medium text-sm">
-            🗑️ Vaciar todo
+            ✕ Vaciar todo
           </button>
         </div>
+        <button onClick={() => setConfirm('clearStats')} className="w-full py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 font-medium text-sm">
+          ✕ Limpiar estadísticas
+        </button>
       </div>
 
       {/* Logout */}
@@ -386,6 +394,14 @@ export default function ConfigPage() {
           message="¿Completar todo el álbum? Se marcará 1 para cada figurita faltante."
           confirmLabel="Completar todo"
           onConfirm={() => { completeAll(); setConfirm(null); }}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
+      {confirm === 'clearStats' && (
+        <ConfirmDialog
+          message="¿Limpiar estadísticas? Se reinician los toques y repetidas históricas. Las cantidades no se modifican."
+          confirmLabel="Limpiar stats"
+          onConfirm={() => { clearStats(); setConfirm(null); }}
           onCancel={() => setConfirm(null)}
         />
       )}

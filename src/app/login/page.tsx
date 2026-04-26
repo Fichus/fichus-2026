@@ -21,7 +21,8 @@ export default function LoginPage() {
       setError(error.message);
       setLoading(false);
     } else {
-      router.push('/album');
+      const params = new URLSearchParams(window.location.search);
+      router.push(params.get('next') || '/album');
     }
   };
 

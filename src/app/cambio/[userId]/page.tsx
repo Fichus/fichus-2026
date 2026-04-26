@@ -45,6 +45,14 @@ export default async function PublicCambioPage({ params }: Props) {
   const targetOwned = Object.values(targetCollection).filter((c) => c > 0).length;
   const targetTotal = ALL_STICKERS.filter((s) => s.section !== 'extra').length;
 
+  // Fetch target user's display name from profiles
+  const { data: profileData } = await supabase
+    .from('profiles')
+    .select('username')
+    .eq('id', userId)
+    .single();
+  const targetUsername = profileData?.username ?? null;
+
   return (
     <PublicCambioClient
       targetUserId={userId}
@@ -53,6 +61,7 @@ export default async function PublicCambioPage({ params }: Props) {
       isViewer={!!viewer && viewer.id !== userId}
       targetOwned={targetOwned}
       targetTotal={targetTotal}
+      targetUsername={targetUsername}
     />
   );
 }

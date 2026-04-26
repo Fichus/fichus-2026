@@ -88,7 +88,7 @@ export default function AlbumPage() {
             ))}
           </div>
         ) : (
-          <p className="text-xs text-zinc-400 px-1 py-2">Sin resultados</p>
+          <p className="text-[13px] text-zinc-400 px-1 py-2">Sin resultados</p>
         )}
       </div>
 
@@ -99,7 +99,7 @@ export default function AlbumPage() {
             ref={registerRef(groupId)}
             className="px-4 py-2 mt-2 bg-zinc-100 dark:bg-zinc-900 border-y border-zinc-200 dark:border-zinc-800 scroll-mt-40"
           >
-            <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+            <span className="text-[13px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
               Grupo {groupId}
             </span>
           </div>
@@ -133,7 +133,7 @@ export default function AlbumPage() {
             ))}
           </div>
         ) : (
-          <p className="text-xs text-zinc-400 px-1 py-2">Sin resultados</p>
+          <p className="text-[13px] text-zinc-400 px-1 py-2">Sin resultados</p>
         )}
       </div>
 

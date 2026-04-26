@@ -42,6 +42,7 @@ interface CollectionContextType {
   clearTeam: (teamCode: string) => Promise<void>;
   clearAll: () => Promise<void>;
   completeAll: () => Promise<void>;
+  clearStats: () => Promise<void>;
   getCount: (code: string) => number;
   isFavorite: (code: string) => boolean;
 }
@@ -234,6 +235,22 @@ export function CollectionProvider({
     }
   }, [collection, userId, supabase]);
 
+  const clearStats = useCallback(async () => {
+    const updates = Object.values(collection).map((e) => ({
+      ...e,
+      history_taps: 0,
+      max_dups: e.count, // reset historical max to current count
+    }));
+    updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
+    const CHUNK = 500;
+    for (let i = 0; i < updates.length; i += CHUNK) {
+      await supabase.from('collection').upsert(
+        updates.slice(i, i + CHUNK).map((e) => ({ user_id: userId, ...e })),
+        { onConflict: 'user_id,sticker_num' }
+      );
+    }
+  }, [collection, userId, supabase]);
+
   const getCount = useCallback((code: string) => collection[code]?.count ?? 0, [collection]);
   const isFavorite = useCallback(
     (code: string) => collection[code]?.is_favorite ?? false,
@@ -252,6 +269,7 @@ export function CollectionProvider({
         clearTeam,
         clearAll,
         completeAll,
+        clearStats,
         getCount,
         isFavorite,
       }}

@@ -72,7 +72,7 @@ export default function FavoritasPage() {
       <div className="flex flex-col gap-4">
         {grouped.map(({ key, label, stickers }) => (
           <div key={key}>
-            <h2 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2">
+            <h2 className="text-[13px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2">
               {label}
             </h2>
             <div className="grid grid-cols-4 gap-1.5">

@@ -111,7 +111,7 @@ export default function Header() {
                 <button
                   key={g}
                   onClick={() => scrollToGroup(g)}
-                  className="flex-shrink-0 px-3 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-xs font-bold text-zinc-600 dark:text-zinc-400 active:bg-[#00B8D4] active:text-white transition-colors"
+                  className="flex-shrink-0 px-3 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-[13px] font-bold text-zinc-600 dark:text-zinc-400 active:bg-[#00B8D4] active:text-white transition-colors"
                 >
                   {g}
                 </button>

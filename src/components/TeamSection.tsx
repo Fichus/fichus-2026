@@ -42,7 +42,7 @@ const TeamSection = forwardRef<HTMLDivElement, Props>(function TeamSection(
         {!isComplete && (
           <button
             onClick={() => setConfirmAction('complete')}
-            className="text-[10px] px-2 py-1 rounded-lg bg-[#00B8D4]/10 text-[#00B8D4] font-semibold"
+            className="text-[13px] px-2 py-1 rounded-lg bg-[#00B8D4]/10 text-[#00B8D4] font-semibold"
           >
             ✓ Completar
           </button>
@@ -50,12 +50,12 @@ const TeamSection = forwardRef<HTMLDivElement, Props>(function TeamSection(
         {hasAny && (
           <button
             onClick={() => setConfirmAction('clear')}
-            className="text-[10px] px-2 py-1 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 font-semibold"
+            className="text-[13px] px-2 py-1 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 font-semibold"
           >
             ✕ Vaciar
           </button>
         )}
-        <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 ml-0.5">
+        <span className="text-[13px] font-semibold text-zinc-500 dark:text-zinc-400 ml-0.5">
           {owned}/{total}
         </span>
       </div>
