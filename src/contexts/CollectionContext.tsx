@@ -85,22 +85,32 @@ export function CollectionProvider({
 
     const load = async () => {
       // Import guest data if any (works for Google OAuth too)
-      try {
-        const raw = localStorage.getItem(GUEST_KEY);
-        if (raw) {
+      const raw = (() => { try { return localStorage.getItem(GUEST_KEY); } catch { return null; } })();
+      if (raw) {
+        try {
           const entries = JSON.parse(raw) as CollectionEntry[];
           if (Array.isArray(entries) && entries.length > 0) {
             const CHUNK = 500;
+            let importOk = true;
             for (let i = 0; i < entries.length; i += CHUNK) {
-              await supabase.from('collection').upsert(
+              const { error } = await supabase.from('collection').upsert(
                 entries.slice(i, i + CHUNK).map((e) => ({ user_id: userId, ...e })),
                 { onConflict: 'user_id,sticker_num' }
               );
+              if (error) { importOk = false; console.error('[guest import]', error); }
             }
+            // Only clear localStorage if import succeeded
+            if (importOk) {
+              try { localStorage.removeItem(GUEST_KEY); } catch {}
+            }
+          } else {
+            // Empty array — nothing to import, clear it
+            try { localStorage.removeItem(GUEST_KEY); } catch {}
           }
-          localStorage.removeItem(GUEST_KEY);
+        } catch (e) {
+          console.error('[guest import parse]', e);
         }
-      } catch {}
+      }
 
       const { data } = await supabase
         .from('collection')
