@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+/* Class-based dark mode for Tailwind v4 */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-primary: #00B8D4;
+  --color-primary-dark: #0097b2;
+  --color-card-empty: #6d28d9;
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #f9fafb;
+  color: #111827;
+}
+
+.dark body {
+  background-color: #09090b;
+  color: #f4f4f5;
+}
+
+/* Safe area bottom padding for iOS home indicator */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Hide scrollbar but keep scroll */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

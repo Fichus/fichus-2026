@@ -1,0 +1,394 @@
+'use client';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
+import { useCollection } from '@/contexts/CollectionContext';
+import ConfirmDialog from '@/components/ConfirmDialog';
+import type { CollectionEntry } from '@/lib/types';
+
+type Section = 'main' | 'profile' | 'howto' | 'support';
+
+export default function ConfigPage() {
+  const [section, setSection] = useState<Section>('main');
+  const [userEmail, setUserEmail] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [displayNameSaving, setDisplayNameSaving] = useState(false);
+  const [displayNameMsg, setDisplayNameMsg] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordMsg, setPasswordMsg] = useState('');
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+  const [confirm, setConfirm] = useState<'clearAll' | 'completeAll' | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const { clearAll, completeAll, collection } = useCollection();
+  const router = useRouter();
+  const supabase = createClient();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setUserEmail(data.user?.email ?? '');
+      setDisplayName(data.user?.user_metadata?.display_name ?? '');
+    });
+    // Read ?section= from URL
+    const params = new URLSearchParams(window.location.search);
+    const s = params.get('section');
+    if (s === 'support' || s === 'howto' || s === 'profile') setSection(s as Section);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/login');
+  };
+
+  const handleSaveDisplayName = async () => {
+    setDisplayNameSaving(true);
+    setDisplayNameMsg('');
+    const { error } = await supabase.auth.updateUser({ data: { display_name: displayName } });
+    setDisplayNameSaving(false);
+    setDisplayNameMsg(error ? 'Error al guardar.' : '¡Guardado!');
+    setTimeout(() => setDisplayNameMsg(''), 2500);
+  };
+
+  const handleChangePassword = async () => {
+    if (!currentPassword) { setPasswordMsg('Ingresá tu contraseña actual.'); return; }
+    if (!newPassword) return;
+    if (newPassword !== confirmPassword) {
+      setPasswordMsg('Las contraseñas nuevas no coinciden.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordMsg('La contraseña debe tener al menos 6 caracteres.');
+      return;
+    }
+    setPasswordSaving(true);
+    setPasswordMsg('');
+    // Verify current password
+    const { error: signInErr } = await supabase.auth.signInWithPassword({
+      email: userEmail,
+      password: currentPassword,
+    });
+    if (signInErr) {
+      setPasswordSaving(false);
+      setPasswordMsg('Contraseña actual incorrecta.');
+      setTimeout(() => setPasswordMsg(''), 3000);
+      return;
+    }
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setPasswordSaving(false);
+    if (error) {
+      setPasswordMsg('Error: ' + error.message);
+    } else {
+      setPasswordMsg('¡Contraseña actualizada!');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    }
+    setTimeout(() => setPasswordMsg(''), 3000);
+  };
+
+  const handleForgotPassword = async () => {
+    if (!userEmail) return;
+    await supabase.auth.resetPasswordForEmail(userEmail, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    setForgotSent(true);
+    setTimeout(() => setForgotSent(false), 5000);
+  };
+
+  const copy = (text: string, key: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 2000);
+    });
+  };
+
+  const exportData = () => {
+    const data = JSON.stringify(collection, null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `fichus2026_backup_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importData = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text) as Record<string, CollectionEntry>;
+        const supabase2 = createClient();
+        const { data: { user } } = await supabase2.auth.getUser();
+        if (!user) return;
+        const entries = Object.values(data).map((entry) => ({
+          user_id: user.id,
+          sticker_num: entry.sticker_num,
+          count: entry.count ?? 0,
+          history_taps: entry.history_taps ?? 0,
+          max_dups: entry.max_dups ?? 0,
+          is_favorite: entry.is_favorite ?? false,
+          updated_at: new Date().toISOString(),
+        }));
+        const CHUNK = 500;
+        for (let i = 0; i < entries.length; i += CHUNK) {
+          await supabase2.from('collection').upsert(entries.slice(i, i + CHUNK), {
+            onConflict: 'user_id,sticker_num',
+          });
+        }
+        window.location.reload();
+      } catch {
+        alert('Error al importar el archivo. Asegurate de que sea un JSON válido.');
+      }
+    };
+    input.click();
+  };
+
+  // ── Sub-section: Editar Perfil ───────────────────────────────────────────
+  if (section === 'profile') {
+    const pwMsgIsError = passwordMsg.includes('Error') || passwordMsg.includes('incorrecta') || passwordMsg.includes('coinciden');
+    return (
+      <div className="px-4 pt-4 pb-4">
+        <button onClick={() => setSection('main')} className="text-[#00B8D4] text-sm mb-4">
+          ← Volver
+        </button>
+        <h1 className="text-lg font-bold text-zinc-900 dark:text-white mb-4">👤 Editar Perfil</h1>
+
+        {/* Username */}
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4">
+          <h2 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 mb-3">Nombre de usuario</h2>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="Tu nombre"
+              className="flex-1 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm px-3 py-2 outline-none focus:ring-2 focus:ring-[#00B8D4]/50"
+            />
+            <button
+              onClick={handleSaveDisplayName}
+              disabled={displayNameSaving}
+              className="px-3 py-2 rounded-xl bg-[#00B8D4] text-white text-xs font-semibold disabled:opacity-50"
+            >
+              {displayNameSaving ? '…' : 'Guardar'}
+            </button>
+          </div>
+          {displayNameMsg && (
+            <p className="text-xs mt-1.5 text-[#00B8D4]">{displayNameMsg}</p>
+          )}
+        </div>
+
+        {/* Change password */}
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4">
+          <h2 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 mb-3">Cambiar contraseña</h2>
+          <div className="flex flex-col gap-2">
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              placeholder="Contraseña actual"
+              className="w-full rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm px-3 py-2 outline-none focus:ring-2 focus:ring-[#00B8D4]/50"
+            />
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Nueva contraseña"
+              className="w-full rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm px-3 py-2 outline-none focus:ring-2 focus:ring-[#00B8D4]/50"
+            />
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Confirmar nueva contraseña"
+              className="w-full rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm px-3 py-2 outline-none focus:ring-2 focus:ring-[#00B8D4]/50"
+            />
+            <button
+              onClick={handleChangePassword}
+              disabled={passwordSaving || !newPassword || !currentPassword}
+              className="py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-medium text-sm disabled:opacity-40"
+            >
+              {passwordSaving ? 'Guardando…' : 'Actualizar contraseña'}
+            </button>
+            {passwordMsg && (
+              <p className={`text-xs ${pwMsgIsError ? 'text-red-500' : 'text-[#00B8D4]'}`}>
+                {passwordMsg}
+              </p>
+            )}
+            <button
+              onClick={handleForgotPassword}
+              disabled={forgotSent}
+              className="text-xs text-zinc-400 hover:text-[#00B8D4] text-left transition-colors disabled:opacity-60 pt-1"
+            >
+              {forgotSent ? '✓ Mail de recuperación enviado' : '¿Olvidaste tu contraseña? Enviar mail de recuperación'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Sub-section: Cómo usar ────────────────────────────────────────────────
+  if (section === 'howto') {
+    return (
+      <div className="px-4 pt-4">
+        <button onClick={() => setSection('main')} className="text-[#00B8D4] text-sm mb-4">
+          ← Volver
+        </button>
+        <h1 className="text-lg font-bold text-zinc-900 dark:text-white mb-4">❓ Cómo usar</h1>
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm text-sm text-zinc-700 dark:text-zinc-300 space-y-3">
+          <p>📖 <strong>Álbum</strong> — Todas tus figuritas organizadas por sección.</p>
+          <p>👆 <strong>Tocar una figurita</strong> suma 1 unidad.</p>
+          <p>👆 <strong>Mantener apretado</strong> abre el detalle de la figurita con más opciones.</p>
+          <p>➕ <strong>Botón +</strong> agrega, <strong>−</strong> resta.</p>
+          <p>☆ <strong>Estrella</strong> (arriba izquierda) marca como favorita.</p>
+          <p>🔢 <strong>Badge ×N</strong> (arriba derecha) indica cuántas repetidas tenés.</p>
+          <p>✓ <strong>Completar equipo</strong> marca 1 en todas las figuritas faltantes del equipo.</p>
+          <p>✕ <strong>Vaciar equipo</strong> pone 0 a todas las figuritas del equipo.</p>
+          <p>📊 <strong>Stats</strong> muestra tu progreso general y por grupo.</p>
+          <p>🔄 <strong>Cambio</strong> genera un link para que otros vean qué podés intercambiar.</p>
+          <p>⭐ <strong>Especiales</strong> son los Extrastickers con 4 versiones cada uno.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Sub-section: Apoyar ───────────────────────────────────────────────────
+  if (section === 'support') {
+    return (
+      <div className="px-4 pt-4">
+        <button onClick={() => setSection('main')} className="text-[#00B8D4] text-sm mb-4">
+          ← Volver
+        </button>
+        <h1 className="text-lg font-bold text-zinc-900 dark:text-white mb-4">💙 Apoyar el proyecto</h1>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
+          Si Fichus2026 te es útil, podés apoyar el desarrollo de la app:
+        </p>
+        <div className="space-y-3">
+          {[
+            { flag: '🇺🇾', label: 'Mercado Pago Uruguay', value: '1006726768654', key: 'uy' },
+            { flag: '🇦🇷', label: 'Mercado Pago Argentina', value: 'facumaro24', key: 'ar' },
+          ].map(({ flag, label, value, key }) => (
+            <div key={key} className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-lg">{flag}</span>
+                <span className="font-bold text-sm text-zinc-800 dark:text-zinc-100">{label}</span>
+              </div>
+              <p className="text-xs text-zinc-500 mb-2">Facundo Marozzi</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl px-3 py-2 text-xs font-mono text-zinc-700 dark:text-zinc-300">
+                  {value}
+                </code>
+                <button
+                  onClick={() => copy(value, key)}
+                  className="px-3 py-2 rounded-xl bg-[#00B8D4] text-white text-xs font-semibold"
+                >
+                  {copiedKey === key ? '✓' : 'Copiar'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Main ──────────────────────────────────────────────────────────────────
+  return (
+    <div className="px-4 pt-4 pb-4">
+      <h1 className="text-lg font-bold text-zinc-900 dark:text-white mb-4">⚙️ Configuración</h1>
+
+      {/* Profile card — name + email prominently */}
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4 flex items-center gap-3">
+        <div className="w-12 h-12 rounded-full bg-[#00B8D4]/15 flex items-center justify-center text-2xl select-none flex-shrink-0">
+          👤
+        </div>
+        <div className="min-w-0">
+          <p className="font-bold text-base text-zinc-900 dark:text-white truncate">
+            {displayName || 'Sin nombre'}
+          </p>
+          <p className="text-xs text-zinc-400 truncate">{userEmail || 'Cargando…'}</p>
+        </div>
+      </div>
+
+      {/* Navigation links */}
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm mb-4 overflow-hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+        {[
+          { label: '👤 Editar Perfil',      action: () => setSection('profile') },
+          { label: '❓ Cómo usar',           action: () => setSection('howto') },
+          { label: '💙 Apoyar el proyecto',  action: () => setSection('support') },
+          { label: '✉️ Contacto',            action: () => { window.location.href = 'mailto:fichus00@gmail.com'; } },
+        ].map(({ label, action }) => (
+          <button
+            key={label}
+            onClick={action}
+            className="w-full text-left px-4 py-3.5 text-sm text-zinc-700 dark:text-zinc-300 flex items-center justify-between"
+          >
+            {label}
+            <span className="text-zinc-300 dark:text-zinc-600">›</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Data */}
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4">
+        <h2 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 mb-3">Importar / Exportar</h2>
+        <div className="flex gap-2">
+          <button onClick={exportData} className="flex-1 py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-medium text-sm">
+            ⬇️ Exportar
+          </button>
+          <button onClick={importData} className="flex-1 py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-medium text-sm">
+            ⬆️ Importar
+          </button>
+        </div>
+      </div>
+
+      {/* Album actions */}
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4">
+        <h2 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 mb-3">Álbum</h2>
+        <div className="flex gap-2">
+          <button onClick={() => setConfirm('completeAll')} className="flex-1 py-2.5 rounded-xl bg-[#00B8D4]/10 text-[#00B8D4] font-medium text-sm">
+            ✓ Completar todo
+          </button>
+          <button onClick={() => setConfirm('clearAll')} className="flex-1 py-2.5 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-500 font-medium text-sm">
+            🗑️ Vaciar todo
+          </button>
+        </div>
+      </div>
+
+      {/* Logout */}
+      <button
+        onClick={handleLogout}
+        className="w-full py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-red-500 font-medium text-sm mb-4"
+      >
+        Cerrar sesión
+      </button>
+
+      {/* Confirm dialogs */}
+      {confirm === 'clearAll' && (
+        <ConfirmDialog
+          message="¿Vaciar todo el álbum? Esta acción no se puede deshacer."
+          confirmLabel="Vaciar todo"
+          danger
+          onConfirm={() => { clearAll(); setConfirm(null); }}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
+      {confirm === 'completeAll' && (
+        <ConfirmDialog
+          message="¿Completar todo el álbum? Se marcará 1 para cada figurita faltante."
+          confirmLabel="Completar todo"
+          onConfirm={() => { completeAll(); setConfirm(null); }}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
+    </div>
+  );
+}
