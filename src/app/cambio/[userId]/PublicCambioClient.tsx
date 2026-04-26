@@ -343,22 +343,30 @@ export default function PublicCambioClient({
           </>
         )}
 
-        {/* Sticky confirm bar */}
-        {isViewer && hasSelection && (
+        {/* Sticky confirm bar — always visible for logged-in viewers */}
+        {isViewer && (
           <div className="fixed bottom-0 left-0 right-0 z-50 flex justify-center pointer-events-none">
             <div className="w-full max-w-sm px-4 pb-6 pointer-events-auto">
               <div className="bg-white dark:bg-zinc-900 rounded-2xl p-3 shadow-[0_-4px_24px_rgba(0,0,0,0.12)] flex items-center gap-3">
-                <div className="flex-1 text-xs text-zinc-500 dark:text-zinc-400 leading-tight">
-                  {selectedReceive.size > 0 && <span className="text-[#00B8D4] font-semibold">+{selectedReceive.size} recibís</span>}
-                  {selectedReceive.size > 0 && selectedGive.size > 0 && <span className="mx-1">·</span>}
-                  {selectedGive.size > 0 && <span className="text-violet-500 font-semibold">−{selectedGive.size} das</span>}
+                <div className="flex-1 text-xs leading-tight">
+                  <span className={selectedReceive.size > 0 ? 'text-[#00B8D4] font-semibold' : 'text-zinc-400 dark:text-zinc-500'}>
+                    +{selectedReceive.size} recibís
+                  </span>
+                  <span className="mx-1.5 text-zinc-300 dark:text-zinc-600">·</span>
+                  <span className={selectedGive.size > 0 ? 'text-violet-500 font-semibold' : 'text-zinc-400 dark:text-zinc-500'}>
+                    −{selectedGive.size} das
+                  </span>
                 </div>
                 <button
                   onClick={handleConfirm}
-                  disabled={confirming}
-                  className="px-5 py-2.5 rounded-xl bg-[#00B8D4] text-white font-bold text-sm disabled:opacity-50 flex-shrink-0"
+                  disabled={!hasSelection || confirming}
+                  className={`px-5 py-2.5 rounded-xl font-bold text-sm flex-shrink-0 transition-colors ${
+                    hasSelection
+                      ? 'bg-[#00B8D4] text-white'
+                      : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-400 dark:text-zinc-500 cursor-not-allowed'
+                  }`}
                 >
-                  {confirming ? 'Confirmando…' : '🔄 Confirmar'}
+                  {confirming ? 'Confirmando…' : '🔄 Cambiar'}
                 </button>
               </div>
             </div>
