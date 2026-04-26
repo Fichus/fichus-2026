@@ -57,11 +57,16 @@ export default function Onboarding() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        // Logged in: show if user hasn't seen onboarding in this account
         setIsLoggedIn(true);
+        // Pre-fill username with the part before @ if not already set
+        const existingName = user.user_metadata?.display_name;
+        if (!existingName && user.email) {
+          setUsername(user.email.split('@')[0]);
+        } else if (existingName) {
+          setUsername(existingName);
+        }
         if (!user.user_metadata?.hasSeenOnboarding) setShow(true);
       } else {
-        // Guest: show if not seen in this browser
         if (!localStorage.getItem('hasSeenOnboarding')) setShow(true);
       }
     };
