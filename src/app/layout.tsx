@@ -32,6 +32,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="mobile-web-app-capable" content="yes" />
         <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5753007351043490"
          crossOrigin="anonymous"></script>
+         <meta property="og:image" content="https://misfichus.com/logo.png" />
+         <meta property="og:title" content="Fichus2026 - Álbum de Figuritas" />
+         <meta property="og:description" content="Rastreá tus figuritas del Mundial 2026" />
       </head>
       <body className={`${geist.variable} bg-zinc-300 dark:bg-zinc-800`}>
         <ThemeProvider>
