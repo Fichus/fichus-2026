@@ -249,17 +249,15 @@ export default function ConfigPage() {
         </button>
         <h1 className="text-lg font-bold text-zinc-900 dark:text-white mb-4">❓ Cómo usar</h1>
         <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm text-sm text-zinc-700 dark:text-zinc-300 space-y-3">
-          <p>📖 <strong>Álbum</strong> — Todas tus figuritas organizadas por sección.</p>
-          <p>👆 <strong>Tocar una figurita</strong> suma 1 unidad.</p>
-          <p>👆 <strong>Mantener apretado</strong> abre el detalle de la figurita con más opciones.</p>
-          <p>➕ <strong>Botón +</strong> agrega, <strong>−</strong> resta.</p>
-          <p>🤍 <strong>Corazón</strong> (arriba izquierda) marca como favorita.</p>
-          <p>🔢 <strong>Badge ×N</strong> (arriba derecha) indica cuántas repetidas tenés.</p>
-          <p>✓ <strong>Completar equipo</strong> marca 1 en todas las figuritas faltantes del equipo.</p>
-          <p>✕ <strong>Vaciar equipo</strong> pone 0 a todas las figuritas del equipo.</p>
-          <p>📊 <strong>Stats</strong> muestra tu progreso general y por grupo.</p>
-          <p>🔄 <strong>Cambio</strong> genera un link para que otros vean qué podés intercambiar.</p>
-          <p>⭐ <strong>Especiales</strong> son los Extrastickers con 4 versiones cada uno.</p>
+          <p>📌 <strong>Tocar una figurita</strong> suma 1. Usá los botones + y − para ajustar la cantidad.</p>
+          <p>👆 <strong>Mantener apretado</strong> abre el detalle completo de la figurita.</p>
+          <p>🔵 <strong>El círculo de arriba a la derecha</strong> muestra cuántas repetidas tenés de esa figurita.</p>
+          <p>🤍 <strong>Usá el ♡</strong> para marcar una figurita como favorita.</p>
+          <p>🔍 <strong>Filtros</strong> Todas / Faltan / Repes muestran solo lo que necesitás.</p>
+          <p>✓ <strong>Completar / Vaciar</strong> (en cada sección) marca o limpia todas las figuritas del grupo.</p>
+          <p>⭐ <strong>Extrastickers</strong> — 21 jugadores especiales con 4 versiones cada uno: Base, Bronce, Plata y Oro.</p>
+          <p>🔄 <strong>Cambio</strong> genera un QR o link para compartir: otros pueden ver tus repetidas y lo que te falta para coordinar intercambios.</p>
+          <p>📊 <strong>Stats</strong> — encontrás tu progreso general.</p>
         </div>
       </div>
     );

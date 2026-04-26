@@ -12,14 +12,14 @@ const STEPS = [
   {
     emoji: '📌',
     title: 'Marcá tus figuritas',
-    desc: 'Tocá una carta para sumar +1. Usá los botones + y − para ajustar. El badge ×N muestra cuántas repetidas tenés.',
+    desc: 'Tocá una carta para sumar +1. Usá los botones + y − para ajustar. El círculo de arriba a la derecha muestra cuántas repetidas tenés.',
     tip: '💡 Mantené apretada una carta para ver su detalle completo.',
   },
   {
-    emoji: '♡',
+    emoji: '🤍',
     title: 'Favoritas y Filtros',
-    desc: 'El corazón ♡ (arriba izquierda) marca una figurita como favorita. Los filtros Todas / Faltan / Repes muestran solo lo que necesitás.',
-    tip: '💡 Los botones de grupo (A, B, C…) te llevan directo a cada sección.',
+    desc: 'Usá el ♡ para marcar una figurita como favorita. Los filtros Todas / Faltan / Repes muestran solo lo que necesitás.',
+    tip: '💡 Los botones de grupo (A, B, C…) te llevan directo a cada sección del álbum.',
   },
   {
     emoji: '⭐',
@@ -28,10 +28,10 @@ const STEPS = [
     tip: '💡 Aparecen al final del álbum en su propia sección.',
   },
   {
-    emoji: '📊',
-    title: 'Stats y Cambio',
-    desc: '"Más tocadas" muestra el historial de toques por figurita. "Más repetidas" muestra las actuales. Cambio genera un QR para coordinar intercambios.',
-    tip: '💡 Si te sirve la app, podés apoyar el proyecto desde Configuración → Apoyar.',
+    emoji: '🔄',
+    title: 'Cambio y Stats',
+    desc: 'Cambio genera un QR o link para compartir: otros pueden ver tus repetidas y lo que te falta para coordinar intercambios. En Stats encontrás tu progreso general.',
+    tip: null,
   },
 ];
 
@@ -72,15 +72,14 @@ export default function Onboarding() {
       if (age) meta.age = age;
       if (Object.keys(meta).length > 0) {
         await supabase.auth.updateUser({ data: meta });
-        if (username.trim()) {
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
-            await supabase.from('profiles').upsert(
-              { id: user.id, username: username.trim() },
-              { onConflict: 'id' }
-            );
-          }
-        }
+      }
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const profileUpdate: Record<string, string | number> = { id: user.id };
+        if (username.trim()) profileUpdate.username = username.trim();
+        if (country) profileUpdate.country = country;
+        if (age) profileUpdate.age = parseInt(age, 10);
+        await supabase.from('profiles').upsert(profileUpdate, { onConflict: 'id' });
       }
     } catch {}
     setSaving(false);
@@ -96,7 +95,7 @@ export default function Onboarding() {
         <div className="w-full max-w-[480px] bg-white dark:bg-zinc-900 rounded-t-2xl p-6 pb-8 shadow-xl">
           <h2 className="text-xl font-bold text-zinc-900 dark:text-white mb-0.5">Configuración inicial</h2>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-5">
-            Opcional — podés completarlo después desde Configuración.
+            Completá tus datos para personalizar la app.
           </p>
 
           <div className="flex flex-col gap-3 mb-6">
@@ -143,21 +142,13 @@ export default function Onboarding() {
             </div>
           </div>
 
-          <div className="flex gap-2">
-            <button
-              onClick={finish}
-              className="flex-1 py-3 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-sm font-semibold"
-            >
-              Saltar
-            </button>
-            <button
-              onClick={handleSaveSetup}
-              disabled={saving}
-              className="flex-1 py-3 rounded-xl bg-[#00B8D4] text-white text-sm font-bold disabled:opacity-50"
-            >
-              {saving ? 'Guardando…' : '¡Listo! →'}
-            </button>
-          </div>
+          <button
+            onClick={handleSaveSetup}
+            disabled={saving}
+            className="w-full py-3 rounded-xl bg-[#00B8D4] text-white text-sm font-bold disabled:opacity-50"
+          >
+            {saving ? 'Guardando…' : '¡Listo! →'}
+          </button>
         </div>
       </div>
     );
@@ -209,8 +200,21 @@ export default function Onboarding() {
           )}
         </div>
 
+        {/* Support CTA — only on last step */}
+        {isLast && (
+          <div className="px-6 pb-2">
+            <a
+              href="/config?section=support"
+              onClick={finish}
+              className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-gradient-to-r from-[#00B8D4] to-[#0098b8] text-white text-sm font-bold shadow-[0_4px_16px_rgba(0,184,212,0.45)] active:scale-95 transition-transform"
+            >
+              💙 Apoyar el proyecto
+            </a>
+          </div>
+        )}
+
         {/* Buttons */}
-        <div className="flex gap-2 px-6 pb-8">
+        <div className="flex gap-2 px-6 pb-8 pt-2">
           {step > 0 ? (
             <button
               onClick={() => setStep(step - 1)}
@@ -228,7 +232,7 @@ export default function Onboarding() {
           )}
           <button
             onClick={isLast ? () => setShowSetup(true) : () => setStep(step + 1)}
-            className="flex-[2] py-3 rounded-xl bg-[#00B8D4] text-white text-sm font-bold"
+            className={`py-3 rounded-xl text-sm font-bold ${isLast ? 'flex-1 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400' : 'flex-[2] bg-[#00B8D4] text-white'}`}
           >
             {isLast ? 'Continuar →' : 'Siguiente →'}
           </button>
