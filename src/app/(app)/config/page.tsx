@@ -20,9 +20,9 @@ export default function ConfigPage() {
   const [passwordMsg, setPasswordMsg] = useState('');
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
-  const [confirm, setConfirm] = useState<'clearAll' | 'completeAll' | 'clearStats' | null>(null);
+  const [confirm, setConfirm] = useState<'clearAll' | 'completeAll' | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const { clearAll, completeAll, clearStats, collection } = useCollection();
+  const { clearAll, completeAll, collection } = useCollection();
   const router = useRouter();
   const supabase = createClient();
 
@@ -329,7 +329,6 @@ export default function ConfigPage() {
           { label: '👤 Editar Perfil',      action: () => setSection('profile') },
           { label: '❓ Cómo usar',           action: () => setSection('howto') },
           { label: '💙 Apoyar el proyecto',  action: () => setSection('support') },
-          { label: '✉️ Contacto',            action: () => { window.location.href = 'mailto:fichus00@gmail.com'; } },
         ].map(({ label, action }) => (
           <button
             key={label}
@@ -340,6 +339,22 @@ export default function ConfigPage() {
             <span className="text-zinc-300 dark:text-zinc-600">›</span>
           </button>
         ))}
+      </div>
+
+      {/* Contact */}
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4">
+        <h2 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 mb-2">✉️ Contacto</h2>
+        <div className="flex items-center gap-2">
+          <code className="flex-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl px-3 py-2 text-sm font-mono text-zinc-700 dark:text-zinc-300 select-all">
+            fichus00@gmail.com
+          </code>
+          <button
+            onClick={() => copy('fichus00@gmail.com', 'contact')}
+            className="px-3 py-2 rounded-xl bg-[#00B8D4] text-white text-sm font-semibold"
+          >
+            {copiedKey === 'contact' ? '✓' : 'Copiar'}
+          </button>
+        </div>
       </div>
 
       {/* Data */}
@@ -358,7 +373,7 @@ export default function ConfigPage() {
       {/* Album actions */}
       <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4">
         <h2 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 mb-3">Álbum</h2>
-        <div className="flex gap-2 mb-2">
+        <div className="flex gap-2">
           <button onClick={() => setConfirm('completeAll')} className="flex-1 py-2.5 rounded-xl bg-[#00B8D4]/10 text-[#00B8D4] font-medium text-sm">
             ✓ Completar todo
           </button>
@@ -366,9 +381,6 @@ export default function ConfigPage() {
             ✕ Vaciar todo
           </button>
         </div>
-        <button onClick={() => setConfirm('clearStats')} className="w-full py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 font-medium text-sm">
-          ✕ Limpiar estadísticas
-        </button>
       </div>
 
       {/* Logout */}
@@ -394,14 +406,6 @@ export default function ConfigPage() {
           message="¿Completar todo el álbum? Se marcará 1 para cada figurita faltante."
           confirmLabel="Completar todo"
           onConfirm={() => { completeAll(); setConfirm(null); }}
-          onCancel={() => setConfirm(null)}
-        />
-      )}
-      {confirm === 'clearStats' && (
-        <ConfirmDialog
-          message="¿Limpiar estadísticas? Se reinician los toques y repetidas históricas. Las cantidades no se modifican."
-          confirmLabel="Limpiar stats"
-          onConfirm={() => { clearStats(); setConfirm(null); }}
           onCancel={() => setConfirm(null)}
         />
       )}

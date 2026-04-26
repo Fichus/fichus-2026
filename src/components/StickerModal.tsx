@@ -51,9 +51,9 @@ export default function StickerModal({ sticker, onClose }: Props) {
             aria-label="Favorita"
           >
             {favorite ? (
-              <span className="text-yellow-400">★</span>
+              <span className="text-red-400">♥</span>
             ) : (
-              <span className="text-zinc-300 dark:text-zinc-600">☆</span>
+              <span className="text-zinc-300 dark:text-zinc-600">♡</span>
             )}
           </button>
           <div className="flex-1 min-w-0">

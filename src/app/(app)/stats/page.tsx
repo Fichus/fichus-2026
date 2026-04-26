@@ -1,13 +1,15 @@
 'use client';
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useCollection } from '@/contexts/CollectionContext';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { ALL_STICKERS, GROUPS, STICKER_MAP, EXTRA_PLAYERS } from '@/lib/stickers';
 
 const GROUP_KEYS = Object.keys(GROUPS);
 const EXTRA_TOTAL = EXTRA_PLAYERS.length * 4;
 
 export default function StatsPage() {
-  const { collection } = useCollection();
+  const { collection, clearStats } = useCollection();
+  const [confirmClearTaps, setConfirmClearTaps] = useState(false);
 
   // ── Overview stats ──────────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -104,7 +106,7 @@ export default function StatsPage() {
 
       {/* Overall progress bar */}
       <div className="px-1 mb-4">
-        <div className="flex justify-between text-xs mb-1.5">
+        <div className="flex justify-between text-[13px] mb-1.5">
           <span className="font-bold text-zinc-700 dark:text-zinc-300">Progreso general</span>
           <span className="font-bold text-[#00B8D4]">{overallPct}%</span>
         </div>
@@ -127,7 +129,7 @@ export default function StatsPage() {
       {/* Especiales block */}
       <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4 flex items-center justify-between">
         <div>
-          <p className="text-xs text-zinc-400 mb-0.5">⭐ Especiales</p>
+          <p className="text-[13px] text-zinc-400 mb-0.5">⭐ Especiales</p>
           <p className="text-2xl font-black text-violet-500">{extrasOwned}<span className="text-sm font-normal text-zinc-400">/{EXTRA_TOTAL}</span></p>
         </div>
         <div className="w-24 h-2 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
@@ -140,9 +142,18 @@ export default function StatsPage() {
 
       {/* Top 8 rankings — side by side */}
       <div className="grid grid-cols-2 gap-2.5 mb-4">
-        <RankingBlock title="🔥 Más tocadas" subtitle="Histórico total de toques" entries={topTapped} valueKey="history_taps" color="text-[#00B8D4]" getName={stickerName} getSub={stickerSub} />
+        <RankingBlock title="🔥 Más tocadas" subtitle="Histórico total de toques" entries={topTapped} valueKey="history_taps" color="text-[#00B8D4]" getName={stickerName} getSub={stickerSub} onClear={() => setConfirmClearTaps(true)} />
         <RankingBlock title="📦 Más repetidas" subtitle="Repetidas que tenés ahora" entries={topDups} valueKey="max_dups" color="text-violet-500" getName={stickerName} getSub={stickerSub} />
       </div>
+
+      {confirmClearTaps && (
+        <ConfirmDialog
+          message="¿Limpiar el historial de toques? No afecta tus cantidades actuales."
+          confirmLabel="Limpiar"
+          onConfirm={() => { clearStats(); setConfirmClearTaps(false); }}
+          onCancel={() => setConfirmClearTaps(false)}
+        />
+      )}
 
       {/* Vertical group chart */}
       <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4">
@@ -185,7 +196,7 @@ function StatBlock({ value, label, color }: { value: number; label: string; colo
 type Entry = { sticker_num: string; history_taps: number; max_dups: number; info?: ReturnType<typeof STICKER_MAP.get> };
 
 function RankingBlock({
-  title, subtitle, entries, valueKey, color, getName, getSub,
+  title, subtitle, entries, valueKey, color, getName, getSub, onClear,
 }: {
   title: string;
   subtitle: string;
@@ -194,11 +205,17 @@ function RankingBlock({
   color: string;
   getName: (e: Entry) => string;
   getSub: (e: Entry) => string;
+  onClear?: () => void;
 }) {
   return (
     <div className="bg-white dark:bg-zinc-900 rounded-2xl p-3 shadow-sm">
-      <h2 className="font-bold text-[13px] text-zinc-800 dark:text-zinc-100 leading-tight">{title}</h2>
-      <p className="text-[11px] text-zinc-400 mb-2 leading-tight">{subtitle}</p>
+      <div className="flex items-start justify-between gap-1 mb-0.5">
+        <h2 className="font-bold text-[13px] text-zinc-800 dark:text-zinc-100 leading-tight">{title}</h2>
+        {onClear && (
+          <button onClick={onClear} className="text-zinc-300 dark:text-zinc-600 text-sm leading-none flex-shrink-0 hover:text-red-400 transition-colors" aria-label="Limpiar">✕</button>
+        )}
+      </div>
+      <p className="text-[13px] text-zinc-400 mb-2 leading-tight">{subtitle}</p>
       {entries.length === 0 ? (
         <p className="text-[13px] text-zinc-400">Sin datos</p>
       ) : (

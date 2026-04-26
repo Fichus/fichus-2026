@@ -47,7 +47,7 @@ export default function CambioPage() {
 
       {/* QR + Trade link */}
       <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4">
-        <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-3">
+        <p className="text-[13px] text-zinc-500 dark:text-zinc-400 mb-3">
           Compartí este QR o link para que otros puedan comparar su colección con la tuya
         </p>
         {tradeUrl ? (
@@ -62,13 +62,13 @@ export default function CambioPage() {
           </div>
         )}
         <div className="flex gap-2">
-          <div className="flex-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-600 dark:text-zinc-300 truncate font-mono">
+          <div className="flex-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl px-3 py-2 text-[13px] text-zinc-600 dark:text-zinc-300 truncate font-mono">
             {tradeUrl || 'Cargando…'}
           </div>
           <button
             onClick={copyUrl}
             disabled={!tradeUrl}
-            className="px-4 py-2 rounded-xl bg-[#00B8D4] text-white text-xs font-semibold disabled:opacity-40"
+            className="px-4 py-2 rounded-xl bg-[#00B8D4] text-white text-[13px] font-semibold disabled:opacity-40"
           >
             {copied ? '✓' : 'Copiar'}
           </button>
@@ -82,13 +82,13 @@ export default function CambioPage() {
           <span className="text-zinc-400 font-normal">({myDuplicates.length} figuritas)</span>
         </h2>
         {myDuplicates.length === 0 ? (
-          <p className="text-xs text-zinc-400">Sin repetidas por ahora</p>
+          <p className="text-[13px] text-zinc-400">Sin repetidas por ahora</p>
         ) : (
           <div className="flex flex-wrap gap-1.5">
             {myDuplicates.map((e) => (
               <div
                 key={e.sticker_num}
-                className="px-2 py-1 rounded-lg bg-[#00B8D4]/10 text-[#00B8D4] text-xs font-semibold"
+                className="px-2 py-1 rounded-lg bg-[#00B8D4]/10 text-[#00B8D4] text-[13px] font-semibold"
               >
                 {e.sticker_num} ×{e.extras}
               </div>
@@ -110,7 +110,7 @@ export default function CambioPage() {
             {myMissing.map((s) => (
               <div
                 key={s.code}
-                className="px-2 py-1 rounded-lg bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 text-xs font-semibold"
+                className="px-2 py-1 rounded-lg bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 text-[13px] font-semibold"
               >
                 {s.code}
               </div>

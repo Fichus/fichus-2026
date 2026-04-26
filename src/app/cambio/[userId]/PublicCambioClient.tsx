@@ -2,6 +2,7 @@
 import React, { useMemo } from 'react';
 import Link from 'next/link';
 import { STICKER_MAP, ALL_STICKERS } from '@/lib/stickers';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface Props {
   targetUserId: string;
@@ -58,6 +59,7 @@ export default function PublicCambioClient({
     return regularStickers.filter((s) => (targetCollection[s.code] ?? 0) === 0);
   }, [isViewer, regularStickers, targetCollection]);
 
+  const { theme, toggleTheme } = useTheme();
   const pct = targetTotal > 0 ? Math.round((targetOwned / targetTotal) * 100) : 0;
   const displayName = targetUsername || 'este usuario';
 
@@ -65,11 +67,20 @@ export default function PublicCambioClient({
     <div className="min-h-screen bg-gray-50 dark:bg-zinc-950 px-4 py-6">
       {/* Header */}
       <div className="max-w-sm mx-auto">
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-black text-zinc-900 dark:text-white">
-            Fichus<span className="text-[#00B8D4]">2026</span>
-          </h1>
-          <p className="text-sm text-zinc-500 mt-1">Página de cambio</p>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-black text-zinc-900 dark:text-white">
+              Fichus<span className="text-[#00B8D4]">2026</span>
+            </h1>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">Página de cambio</p>
+          </div>
+          <button
+            onClick={toggleTheme}
+            className="w-9 h-9 rounded-full flex items-center justify-center bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300"
+            aria-label="Cambiar tema"
+          >
+            {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
         </div>
 
         {/* Target stats */}

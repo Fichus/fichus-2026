@@ -206,9 +206,22 @@ export function CollectionProvider({
   );
 
   const clearAll = useCallback(async () => {
-    dispatch({ type: 'CLEAR_ALL' });
-    await supabase.from('collection').delete().eq('user_id', userId);
-  }, [userId, supabase]);
+    // Reset counts but KEEP history_taps (so "más tocadas" ranking persists)
+    const updates = Object.values(collection).map((e) => ({
+      ...e,
+      count: 0,
+      max_dups: 0,
+      is_favorite: false,
+    }));
+    dispatch({ type: 'LOAD', payload: updates });
+    const CHUNK = 500;
+    for (let i = 0; i < updates.length; i += CHUNK) {
+      await supabase.from('collection').upsert(
+        updates.slice(i, i + CHUNK).map((e) => ({ user_id: userId, ...e })),
+        { onConflict: 'user_id,sticker_num' }
+      );
+    }
+  }, [collection, userId, supabase]);
 
   const completeAll = useCallback(async () => {
     const updates: CollectionEntry[] = ALL_STICKERS.map((s) => {
@@ -236,10 +249,10 @@ export function CollectionProvider({
   }, [collection, userId, supabase]);
 
   const clearStats = useCallback(async () => {
+    // Only reset history_taps — max_dups reflects the current album state
     const updates = Object.values(collection).map((e) => ({
       ...e,
       history_taps: 0,
-      max_dups: e.count, // reset historical max to current count
     }));
     updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
     const CHUNK = 500;

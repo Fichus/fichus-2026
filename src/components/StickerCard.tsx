@@ -151,9 +151,9 @@ function StickerCard({ sticker }: Props) {
   );
 
   // ── Card content labels ───────────────────────────────────────────────────
-  // For extra stickers: show player name as main label + country as sub (no variant label)
-  const mainLabel = isExtra ? (sticker.extraPlayerName ?? sticker.role) : sticker.label;
-  const subLabel  = isExtra ? (sticker.extraCountry ?? '') : sticker.role;
+  const VARIANT_LABELS: Record<string, string> = { BASE: 'Base', BRO: 'Bronce', SIL: 'Plata', ORO: 'Oro' };
+  const mainLabel = isExtra ? (VARIANT_LABELS[variant] ?? variant) : sticker.label;
+  const subLabel  = isExtra ? '' : sticker.role;
 
   return (
     <>
