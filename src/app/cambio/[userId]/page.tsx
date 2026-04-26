@@ -59,6 +59,7 @@ export default async function PublicCambioPage({ params }: Props) {
       targetCollection={targetCollection}
       viewerCollection={viewerCollection}
       isViewer={!!viewer && viewer.id !== userId}
+      viewerUserId={viewer && viewer.id !== userId ? viewer.id : null}
       targetOwned={targetOwned}
       targetTotal={targetTotal}
       targetUsername={targetUsername}
