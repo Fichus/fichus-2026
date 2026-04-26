@@ -22,7 +22,7 @@ export default function ConfigPage() {
   const [forgotSent, setForgotSent] = useState(false);
   const [confirm, setConfirm] = useState<'clearAll' | 'completeAll' | 'addOneAll' | 'removeOneAll' | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const { clearAll, completeAll, addOneAll, removeOneAll, collection } = useCollection();
+  const { clearAll, completeAll, addOneAll, removeOneAll, collection, isGuest } = useCollection();
   const router = useRouter();
   const supabase = createClient();
 
@@ -336,25 +336,43 @@ export default function ConfigPage() {
     <div className="px-4 pt-4 pb-4">
       <h1 className="text-lg font-bold text-zinc-900 dark:text-white mb-4">⚙️ Configuración</h1>
 
-      {/* Profile card — name + email prominently */}
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4 flex items-center gap-3">
-        <div className="w-12 h-12 rounded-full bg-[#00B8D4]/15 flex items-center justify-center text-2xl select-none flex-shrink-0">
-          👤
+      {/* Profile card */}
+      {isGuest ? (
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4 flex items-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-2xl select-none flex-shrink-0">
+            👤
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-bold text-sm text-zinc-900 dark:text-white">Modo invitado</p>
+            <p className="text-xs text-zinc-400 mt-0.5">Iniciá sesión para guardar tu progreso</p>
+          </div>
+          <a
+            href="/login"
+            className="px-3 py-2 rounded-xl bg-[#00B8D4] text-white text-xs font-bold flex-shrink-0"
+          >
+            Entrar
+          </a>
         </div>
-        <div className="min-w-0">
-          <p className="font-bold text-base text-zinc-900 dark:text-white truncate">
-            {displayName || 'Sin nombre'}
-          </p>
-          <p className="text-xs text-zinc-400 truncate">{userEmail || 'Cargando…'}</p>
+      ) : (
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4 flex items-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-[#00B8D4]/15 flex items-center justify-center text-2xl select-none flex-shrink-0">
+            👤
+          </div>
+          <div className="min-w-0">
+            <p className="font-bold text-base text-zinc-900 dark:text-white truncate">
+              {displayName || 'Sin nombre'}
+            </p>
+            <p className="text-xs text-zinc-400 truncate">{userEmail || 'Cargando…'}</p>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Navigation links */}
       <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm mb-4 overflow-hidden divide-y divide-zinc-100 dark:divide-zinc-800">
         {[
-          { label: '👤 Editar Perfil',      action: () => setSection('profile') },
-          { label: '❓ Cómo usar',           action: () => setSection('howto') },
-          { label: '💙 Apoyar el proyecto',  action: () => setSection('support') },
+          ...(!isGuest ? [{ label: '👤 Editar Perfil', action: () => setSection('profile') }] : []),
+          { label: '❓ Cómo usar',          action: () => setSection('howto') },
+          { label: '💙 Apoyar el proyecto', action: () => setSection('support') },
         ].map(({ label, action }) => (
           <button
             key={label}
@@ -417,13 +435,30 @@ export default function ConfigPage() {
         </div>
       </div>
 
-      {/* Logout */}
-      <button
-        onClick={handleLogout}
-        className="w-full py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-red-500 font-medium text-sm mb-4"
-      >
-        Cerrar sesión
-      </button>
+      {/* Logout / Login */}
+      {isGuest ? (
+        <div className="flex gap-2 mb-4">
+          <a
+            href="/login"
+            className="flex-1 py-2.5 rounded-xl bg-[#00B8D4] text-white font-semibold text-sm text-center"
+          >
+            Iniciar sesión
+          </a>
+          <a
+            href="/register"
+            className="flex-1 py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-semibold text-sm text-center"
+          >
+            Registrarse
+          </a>
+        </div>
+      ) : (
+        <button
+          onClick={handleLogout}
+          className="w-full py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-red-500 font-medium text-sm mb-4"
+        >
+          Cerrar sesión
+        </button>
+      )}
 
       {/* Confirm dialogs */}
       {confirm === 'clearAll' && (
