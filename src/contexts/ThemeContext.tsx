@@ -1,5 +1,5 @@
 'use client';
-import React, { createContext, useContext, useEffect, useSyncExternalStore } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 
 type Theme = 'light' | 'dark';
 
@@ -9,61 +9,49 @@ interface ThemeContextType {
 }
 
 const STORAGE_KEY = 'fichus-theme';
-const THEME_EVENT = 'fichus-theme-change';
 
 const ThemeContext = createContext<ThemeContextType>({ theme: 'light', toggleTheme: () => {} });
 
-function readTheme(): Theme {
-  if (typeof window === 'undefined') return 'light';
-
-  try {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
-    if (saved === 'light' || saved === 'dark') return saved;
-
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  } catch {
-    return document.documentElement.classList.contains('dark') ? 'dark' : 'light';
-  }
-}
-
-function subscribe(callback: () => void) {
-  if (typeof window === 'undefined') return () => {};
-
-  const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-  const handleStorage = (event: StorageEvent) => {
-    if (!event.key || event.key === STORAGE_KEY) callback();
-  };
-
-  window.addEventListener('storage', handleStorage);
-  window.addEventListener(THEME_EVENT, callback);
-  mediaQuery.addEventListener('change', callback);
-
-  return () => {
-    window.removeEventListener('storage', handleStorage);
-    window.removeEventListener(THEME_EVENT, callback);
-    mediaQuery.removeEventListener('change', callback);
-  };
-}
-
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const theme = useSyncExternalStore<Theme>(subscribe, readTheme, () => 'light');
+  // null = not yet initialized (avoids touching the class before localStorage is read)
+  const [theme, setTheme] = useState<Theme | null>(null);
 
+  // On mount: read localStorage (or system preference) and set initial theme
   useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved === 'dark' || saved === 'light') {
+        setTheme(saved);
+      } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        setTheme('dark');
+      } else {
+        setTheme('light');
+      }
+    } catch {
+      setTheme('light');
+    }
+  }, []);
+
+  // Apply class only after theme is initialized — never runs with stale 'light' default
+  useEffect(() => {
+    if (theme === null) return;
     document.documentElement.classList.toggle('dark', theme === 'dark');
     document.documentElement.style.colorScheme = theme;
-    localStorage.setItem(STORAGE_KEY, theme);
   }, [theme]);
 
   const toggleTheme = () => {
-    const nextTheme = theme === 'light' ? 'dark' : 'light';
-
-    localStorage.setItem(STORAGE_KEY, nextTheme);
-    document.documentElement.classList.toggle('dark', nextTheme === 'dark');
-    document.documentElement.style.colorScheme = nextTheme;
-    window.dispatchEvent(new Event(THEME_EVENT));
+    const next: Theme = (theme ?? 'light') === 'light' ? 'dark' : 'light';
+    try {
+      localStorage.setItem(STORAGE_KEY, next); // save BEFORE state update
+    } catch {}
+    setTheme(next);
   };
 
-  return <ThemeContext.Provider value={{ theme, toggleTheme }}>{children}</ThemeContext.Provider>;
+  return (
+    <ThemeContext.Provider value={{ theme: theme ?? 'light', toggleTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
 }
 
 export const useTheme = () => useContext(ThemeContext);

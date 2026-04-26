@@ -1,8 +1,9 @@
 'use client';
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useCollection } from '@/contexts/CollectionContext';
 import StickerCard from '@/components/StickerCard';
 import TeamSection from '@/components/TeamSection';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import {
   GROUPS,
   getFCWStickers,
@@ -14,10 +15,11 @@ import QuickScrollBar from '@/components/QuickScrollBar';
 import type { StickerInfo } from '@/lib/types';
 
 export default function AlbumPage() {
-  const { getCount, collection } = useCollection();
+  const { getCount, collection, completeCodes, clearCodes } = useCollection();
   const [filter] = useAlbumFilter();
   const [search, setSearch] = React.useState('');
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
+  const [confirmAction, setConfirmAction] = useState<{ section: 'FCW' | 'CC'; type: 'complete' | 'clear' } | null>(null);
 
   const fcwStickers = useMemo(() => getFCWStickers(), []);
   const ccStickers  = useMemo(() => getCCStickers(), []);
@@ -63,6 +65,20 @@ export default function AlbumPage() {
   const hasSearch = search.trim().length > 0;
   const hasFilter = filter !== 'all';
 
+  // ── Section stats ───────────────────────────────────────────────────────────
+  const fcwOwned = useMemo(() => fcwStickers.filter((s) => getCount(s.code) > 0).length, [fcwStickers, getCount, collection]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ccOwned  = useMemo(() => ccStickers.filter((s) => getCount(s.code) > 0).length,  [ccStickers,  getCount, collection]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleConfirm = async () => {
+    if (!confirmAction) return;
+    const codes = confirmAction.section === 'FCW'
+      ? fcwStickers.map((s) => s.code)
+      : ccStickers.map((s) => s.code);
+    if (confirmAction.type === 'complete') await completeCodes(codes);
+    else await clearCodes(codes);
+    setConfirmAction(null);
+  };
+
   return (
     <div>
       {/* Search — scrollable, sits above FCW */}
@@ -78,9 +94,30 @@ export default function AlbumPage() {
 
       {/* FCW Section */}
       <div ref={registerRef('FCW')} className="px-3 mb-2 mt-2 scroll-mt-40">
-        <h2 className="font-bold text-sm text-zinc-700 dark:text-zinc-300 mb-2 px-1">
-          🌍 FCW — Introducción &amp; Historia
-        </h2>
+        <div className="flex items-center gap-1.5 py-1 mb-1">
+          <h2 className="font-bold text-sm text-zinc-700 dark:text-zinc-300 flex-1">
+            🌍 FCW — Introducción &amp; Historia
+          </h2>
+          {fcwOwned < fcwStickers.length && (
+            <button
+              onClick={() => setConfirmAction({ section: 'FCW', type: 'complete' })}
+              className="text-[13px] px-2 py-1 rounded-lg bg-[#00B8D4]/10 text-[#00B8D4] font-semibold"
+            >
+              ✓ Completar
+            </button>
+          )}
+          {fcwOwned > 0 && (
+            <button
+              onClick={() => setConfirmAction({ section: 'FCW', type: 'clear' })}
+              className="text-[13px] px-2 py-1 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 font-semibold"
+            >
+              ✕ Vaciar
+            </button>
+          )}
+          <span className="text-[13px] font-semibold text-zinc-500 dark:text-zinc-400">
+            {fcwOwned}/{fcwStickers.length}
+          </span>
+        </div>
         {visibleFCW.length > 0 ? (
           <div className="grid grid-cols-4 gap-1.5">
             {visibleFCW.map((s) => (
@@ -123,9 +160,30 @@ export default function AlbumPage() {
 
       {/* CC — Coca-Cola Section */}
       <div ref={registerRef('CC')} className="px-3 mb-2 mt-3 scroll-mt-40">
-        <h2 className="font-bold text-sm text-zinc-700 dark:text-zinc-300 mb-2 px-1">
-          🥤 Coca-Cola
-        </h2>
+        <div className="flex items-center gap-1.5 py-1 mb-1">
+          <h2 className="font-bold text-sm text-zinc-700 dark:text-zinc-300 flex-1">
+            🥤 Coca-Cola
+          </h2>
+          {ccOwned < ccStickers.length && (
+            <button
+              onClick={() => setConfirmAction({ section: 'CC', type: 'complete' })}
+              className="text-[13px] px-2 py-1 rounded-lg bg-[#00B8D4]/10 text-[#00B8D4] font-semibold"
+            >
+              ✓ Completar
+            </button>
+          )}
+          {ccOwned > 0 && (
+            <button
+              onClick={() => setConfirmAction({ section: 'CC', type: 'clear' })}
+              className="text-[13px] px-2 py-1 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 font-semibold"
+            >
+              ✕ Vaciar
+            </button>
+          )}
+          <span className="text-[13px] font-semibold text-zinc-500 dark:text-zinc-400">
+            {ccOwned}/{ccStickers.length}
+          </span>
+        </div>
         {visibleCC.length > 0 ? (
           <div className="grid grid-cols-4 gap-1.5">
             {visibleCC.map((s) => (
@@ -141,6 +199,25 @@ export default function AlbumPage() {
 
       {/* Floating quick-scroll sidebar */}
       <QuickScrollBar onSelect={scrollToGroupFn} />
+
+      {/* Confirm dialogs */}
+      {confirmAction?.type === 'complete' && (
+        <ConfirmDialog
+          message={`¿Completar la sección ${confirmAction.section}? Se marcará 1 para cada figurita faltante.`}
+          confirmLabel="Completar"
+          onConfirm={handleConfirm}
+          onCancel={() => setConfirmAction(null)}
+        />
+      )}
+      {confirmAction?.type === 'clear' && (
+        <ConfirmDialog
+          message={`¿Vaciar la sección ${confirmAction.section}? Se pondrá 0 a todas sus figuritas.`}
+          confirmLabel="Vaciar"
+          danger
+          onConfirm={handleConfirm}
+          onCancel={() => setConfirmAction(null)}
+        />
+      )}
     </div>
   );
 }

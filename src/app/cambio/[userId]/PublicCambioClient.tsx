@@ -83,7 +83,7 @@ export default function PublicCambioClient({
     return regularStickers.filter((s) => (targetCollection[s.code] ?? 0) === 0);
   }, [isViewer, regularStickers, targetCollection]);
 
-  const { theme, toggleTheme } = useTheme();
+  const { toggleTheme } = useTheme();
   const pct = targetTotal > 0 ? Math.round((targetOwned / targetTotal) * 100) : 0;
   const displayName = targetUsername || 'este usuario';
 

@@ -40,6 +40,8 @@ interface CollectionContextType {
   toggleFavorite: (code: string) => void;
   completeTeam: (teamCode: string) => Promise<void>;
   clearTeam: (teamCode: string) => Promise<void>;
+  completeCodes: (codes: string[]) => Promise<void>;
+  clearCodes: (codes: string[]) => Promise<void>;
   clearAll: () => Promise<void>;
   completeAll: () => Promise<void>;
   addOneAll: () => Promise<void>;
@@ -186,6 +188,44 @@ export function CollectionProvider({
     [collection, userId, supabase]
   );
 
+  const completeCodes = useCallback(
+    async (codes: string[]) => {
+      const updates: CollectionEntry[] = codes.map((code) => {
+        const cur = collection[code];
+        const newCount = Math.max(cur?.count ?? 0, 1);
+        return {
+          sticker_num: code,
+          count: newCount,
+          history_taps: (cur?.history_taps ?? 0) + (cur?.count === 0 ? 1 : 0),
+          max_dups: Math.max(cur?.max_dups ?? 0, newCount),
+          is_favorite: cur?.is_favorite ?? false,
+        };
+      });
+      updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
+      await supabase.from('collection').upsert(
+        updates.map((e) => ({ user_id: userId, ...e })),
+        { onConflict: 'user_id,sticker_num' }
+      );
+    },
+    [collection, userId, supabase]
+  );
+
+  const clearCodes = useCallback(
+    async (codes: string[]) => {
+      const updates: CollectionEntry[] = codes.map((code) => ({
+        ...(collection[code] ?? { history_taps: 0, max_dups: 0, is_favorite: false }),
+        sticker_num: code,
+        count: 0,
+      })) as CollectionEntry[];
+      updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
+      await supabase.from('collection').upsert(
+        updates.map((e) => ({ user_id: userId, ...e })),
+        { onConflict: 'user_id,sticker_num' }
+      );
+    },
+    [collection, userId, supabase]
+  );
+
   const clearTeam = useCallback(
     async (teamCode: string) => {
       const teamStickers = getTeamStickers(teamCode);
@@ -320,6 +360,8 @@ export function CollectionProvider({
         clearTeam,
         clearAll,
         completeAll,
+        completeCodes,
+        clearCodes,
         addOneAll,
         removeOneAll,
         clearStats,
