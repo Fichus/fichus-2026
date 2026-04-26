@@ -253,7 +253,7 @@ export default function ConfigPage() {
           <p>👆 <strong>Tocar una figurita</strong> suma 1 unidad.</p>
           <p>👆 <strong>Mantener apretado</strong> abre el detalle de la figurita con más opciones.</p>
           <p>➕ <strong>Botón +</strong> agrega, <strong>−</strong> resta.</p>
-          <p>♡ <strong>Corazón</strong> (arriba izquierda) marca como favorita.</p>
+          <p>🤍 <strong>Corazón</strong> (arriba izquierda) marca como favorita.</p>
           <p>🔢 <strong>Badge ×N</strong> (arriba derecha) indica cuántas repetidas tenés.</p>
           <p>✓ <strong>Completar equipo</strong> marca 1 en todas las figuritas faltantes del equipo.</p>
           <p>✕ <strong>Vaciar equipo</strong> pone 0 a todas las figuritas del equipo.</p>
@@ -300,6 +300,34 @@ export default function ConfigPage() {
               </div>
             </div>
           ))}
+
+          {/* PayPal — rest of the world */}
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-lg">🌍</span>
+              <span className="font-bold text-sm text-zinc-800 dark:text-zinc-100">Resto del mundo — PayPal</span>
+            </div>
+            <p className="text-xs text-zinc-500 mb-3">Facundo Marozzi</p>
+            <a
+              href="https://www.paypal.com/donate/?business=fichus00%40gmail.com&currency_code=USD"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block w-full py-2.5 rounded-xl bg-[#0070BA] text-white text-sm font-semibold text-center mb-2"
+            >
+              💙 Donar con PayPal
+            </a>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl px-3 py-2 text-xs font-mono text-zinc-700 dark:text-zinc-300 select-all">
+                fichus00@gmail.com
+              </code>
+              <button
+                onClick={() => copy('fichus00@gmail.com', 'paypal-email')}
+                className="px-3 py-2 rounded-xl bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-semibold"
+              >
+                {copiedKey === 'paypal-email' ? '✓' : 'Copiar'}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );

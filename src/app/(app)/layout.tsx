@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { CollectionProvider } from '@/contexts/CollectionContext';
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
+import Onboarding from '@/components/Onboarding';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -19,6 +20,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <Header />
         <main className="flex-1 pb-20">{children}</main>
         <BottomNav />
+        <Onboarding />
         {/* Floating support button */}
         <Link
           href="/config?section=support"

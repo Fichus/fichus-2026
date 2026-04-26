@@ -34,20 +34,22 @@ export default function QuickScrollBar({ onSelect }: Props) {
 
   return (
     <div
-      className={`fixed z-40 top-1/2 -translate-y-1/2 flex flex-col items-center gap-0 transition-opacity duration-300 ${
+      className={`fixed z-40 top-1/2 -translate-y-1/2 transition-opacity duration-300 ${
         visible ? 'opacity-100' : 'opacity-0 pointer-events-none'
       }`}
       style={{ right: 'max(2px, calc((100vw - 480px) / 2 + 2px))' }}
     >
-      {GROUPS.map((g) => (
-        <button
-          key={g}
-          onClick={() => handleSelect(g)}
-          className="text-[13px] font-bold text-zinc-500 dark:text-zinc-400 hover:text-[#00B8D4] dark:hover:text-[#00B8D4] active:text-[#00B8D4] leading-none py-1 px-2 transition-colors"
-        >
-          {g}
-        </button>
-      ))}
+      <div className="flex flex-col items-center gap-0 bg-white/70 dark:bg-zinc-800/70 backdrop-blur-sm rounded-full py-1 px-0.5 shadow-sm">
+        {GROUPS.map((g) => (
+          <button
+            key={g}
+            onClick={() => handleSelect(g)}
+            className="text-[13px] font-bold text-zinc-500 dark:text-zinc-400 hover:text-[#00B8D4] dark:hover:text-[#00B8D4] active:text-[#00B8D4] leading-none py-1 px-2 transition-colors"
+          >
+            {g}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
