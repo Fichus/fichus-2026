@@ -4,6 +4,7 @@ import Script from 'next/script';
 import './globals.css';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { ThemeScript } from './ThemeScript';
+import { Analytics } from '@vercel/analytics/next';
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist-sans' });
 
@@ -61,6 +62,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             __html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{})}`,
           }}
         />
+        <Analytics />
       </body>
     </html>
   );
