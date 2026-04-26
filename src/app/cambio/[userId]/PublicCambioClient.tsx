@@ -92,12 +92,12 @@ export default function PublicCambioClient({
       {/* Header */}
       <div className="max-w-sm mx-auto">
         <div className="flex items-center justify-between mb-6">
-          <div>
+          <Link href="/album">
             <h1 className="text-2xl font-black text-zinc-900 dark:text-white">
               Fichus<span className="text-[#00B8D4]">2026</span>
             </h1>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">Página de cambio</p>
-          </div>
+          </Link>
           <button
             onClick={toggleTheme}
             className="w-9 h-9 rounded-full flex items-center justify-center bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300"
@@ -225,6 +225,18 @@ export default function PublicCambioClient({
             </div>
           </>
         )}
+        {/* Footer CTA */}
+        <div className="mt-6 pb-8 flex flex-col items-center gap-3">
+          <Link
+            href="/album"
+            className="w-full py-3 rounded-xl bg-[#00B8D4] text-white font-bold text-sm text-center"
+          >
+            Abrir mi álbum →
+          </Link>
+          <p className="text-xs text-zinc-400 dark:text-zinc-600">
+            Fichus2026 — Tu colección del Mundial 2026
+          </p>
+        </div>
       </div>
     </div>
   );
