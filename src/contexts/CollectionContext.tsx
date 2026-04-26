@@ -42,6 +42,8 @@ interface CollectionContextType {
   clearTeam: (teamCode: string) => Promise<void>;
   clearAll: () => Promise<void>;
   completeAll: () => Promise<void>;
+  addOneAll: () => Promise<void>;
+  removeOneAll: () => Promise<void>;
   clearStats: () => Promise<void>;
   getCount: (code: string) => number;
   isFavorite: (code: string) => boolean;
@@ -248,6 +250,42 @@ export function CollectionProvider({
     }
   }, [collection, userId, supabase]);
 
+  const addOneAll = useCallback(async () => {
+    const updates: CollectionEntry[] = ALL_STICKERS.map((s) => {
+      const cur = collection[s.code];
+      const newCount = (cur?.count ?? 0) + 1;
+      return {
+        sticker_num: s.code,
+        count: newCount,
+        history_taps: (cur?.history_taps ?? 0) + 1,
+        max_dups: Math.max(cur?.max_dups ?? 0, newCount),
+        is_favorite: cur?.is_favorite ?? false,
+      };
+    });
+    updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
+    const CHUNK = 500;
+    for (let i = 0; i < updates.length; i += CHUNK) {
+      await supabase.from('collection').upsert(
+        updates.slice(i, i + CHUNK).map((e) => ({ user_id: userId, ...e })),
+        { onConflict: 'user_id,sticker_num' }
+      );
+    }
+  }, [collection, userId, supabase]);
+
+  const removeOneAll = useCallback(async () => {
+    const updates: CollectionEntry[] = Object.values(collection)
+      .filter((e) => e.count > 0)
+      .map((e) => ({ ...e, count: e.count - 1 }));
+    updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
+    const CHUNK = 500;
+    for (let i = 0; i < updates.length; i += CHUNK) {
+      await supabase.from('collection').upsert(
+        updates.slice(i, i + CHUNK).map((e) => ({ user_id: userId, ...e })),
+        { onConflict: 'user_id,sticker_num' }
+      );
+    }
+  }, [collection, userId, supabase]);
+
   const clearStats = useCallback(async () => {
     // Only reset history_taps — max_dups reflects the current album state
     const updates = Object.values(collection).map((e) => ({
@@ -282,6 +320,8 @@ export function CollectionProvider({
         clearTeam,
         clearAll,
         completeAll,
+        addOneAll,
+        removeOneAll,
         clearStats,
         getCount,
         isFavorite,

@@ -20,9 +20,9 @@ export default function ConfigPage() {
   const [passwordMsg, setPasswordMsg] = useState('');
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
-  const [confirm, setConfirm] = useState<'clearAll' | 'completeAll' | null>(null);
+  const [confirm, setConfirm] = useState<'clearAll' | 'completeAll' | 'addOneAll' | 'removeOneAll' | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const { clearAll, completeAll, collection } = useCollection();
+  const { clearAll, completeAll, addOneAll, removeOneAll, collection } = useCollection();
   const router = useRouter();
   const supabase = createClient();
 
@@ -373,12 +373,20 @@ export default function ConfigPage() {
       {/* Album actions */}
       <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4">
         <h2 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 mb-3">Álbum</h2>
-        <div className="flex gap-2">
+        <div className="flex gap-2 mb-2">
           <button onClick={() => setConfirm('completeAll')} className="flex-1 py-2.5 rounded-xl bg-[#00B8D4]/10 text-[#00B8D4] font-medium text-sm">
             ✓ Completar todo
           </button>
           <button onClick={() => setConfirm('clearAll')} className="flex-1 py-2.5 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-500 font-medium text-sm">
             ✕ Vaciar todo
+          </button>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => setConfirm('addOneAll')} className="flex-1 py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-medium text-sm">
+            +1 Sumar 1 a todas
+          </button>
+          <button onClick={() => setConfirm('removeOneAll')} className="flex-1 py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-medium text-sm">
+            −1 Restar 1 a todas
           </button>
         </div>
       </div>
@@ -406,6 +414,22 @@ export default function ConfigPage() {
           message="¿Completar todo el álbum? Se marcará 1 para cada figurita faltante."
           confirmLabel="Completar todo"
           onConfirm={() => { completeAll(); setConfirm(null); }}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
+      {confirm === 'addOneAll' && (
+        <ConfirmDialog
+          message="¿Sumar 1 a todas las figuritas? Cada una tendrá +1 en su conteo actual."
+          confirmLabel="+1 a todas"
+          onConfirm={() => { addOneAll(); setConfirm(null); }}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
+      {confirm === 'removeOneAll' && (
+        <ConfirmDialog
+          message="¿Restar 1 a todas las figuritas? Las que están en 0 no cambian."
+          confirmLabel="−1 a todas"
+          onConfirm={() => { removeOneAll(); setConfirm(null); }}
           onCancel={() => setConfirm(null)}
         />
       )}
