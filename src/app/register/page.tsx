@@ -22,7 +22,7 @@ export default function RegisterPage() {
     }
     setLoading(true);
     setError('');
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { emailRedirectTo: `${location.origin}/auth/callback` },
@@ -30,6 +30,9 @@ export default function RegisterPage() {
     if (error) {
       setError(error.message);
       setLoading(false);
+    } else if (data.session) {
+      // Auto-confirm active: already logged in, go straight to album so guest import runs
+      router.push('/album');
     } else {
       setDone(true);
     }
@@ -45,6 +48,12 @@ export default function RegisterPage() {
         <p className="text-zinc-500 dark:text-zinc-400 text-sm max-w-xs">
           Te mandamos un enlace de confirmación. Hacé click en él para activar tu cuenta.
         </p>
+        <div className="mt-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl px-4 py-3 max-w-xs text-left">
+          <p className="text-amber-700 dark:text-amber-400 text-xs font-semibold mb-1">⚠️ Importante si tenés figus cargadas</p>
+          <p className="text-amber-600 dark:text-amber-500 text-xs leading-relaxed">
+            Abrí el link de confirmación en <strong>este mismo navegador</strong> para no perder las figuritas que ya cargaste.
+          </p>
+        </div>
         <button
           onClick={() => router.push('/login')}
           className="mt-6 px-6 py-3 rounded-xl bg-[#00B8D4] text-white font-semibold text-sm"

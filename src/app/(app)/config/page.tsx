@@ -22,7 +22,7 @@ export default function ConfigPage() {
   const [forgotSent, setForgotSent] = useState(false);
   const [confirm, setConfirm] = useState<'clearAll' | 'completeAll' | 'addOneAll' | 'removeOneAll' | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const { clearAll, completeAll, addOneAll, removeOneAll, collection, isGuest } = useCollection();
+  const { clearAll, completeAll, addOneAll, removeOneAll, collection, isGuest, importCollection } = useCollection();
   const router = useRouter();
   const supabase = createClient();
 
@@ -130,25 +130,7 @@ export default function ConfigPage() {
       try {
         const text = await file.text();
         const data = JSON.parse(text) as Record<string, CollectionEntry>;
-        const supabase2 = createClient();
-        const { data: { user } } = await supabase2.auth.getUser();
-        if (!user) return;
-        const entries = Object.values(data).map((entry) => ({
-          user_id: user.id,
-          sticker_num: entry.sticker_num,
-          count: entry.count ?? 0,
-          history_taps: entry.history_taps ?? 0,
-          max_dups: entry.max_dups ?? 0,
-          is_favorite: entry.is_favorite ?? false,
-          updated_at: new Date().toISOString(),
-        }));
-        const CHUNK = 500;
-        for (let i = 0; i < entries.length; i += CHUNK) {
-          await supabase2.from('collection').upsert(entries.slice(i, i + CHUNK), {
-            onConflict: 'user_id,sticker_num',
-          });
-        }
-        window.location.reload();
+        await importCollection(data);
       } catch {
         alert('Error al importar el archivo. Asegurate de que sea un JSON válido.');
       }

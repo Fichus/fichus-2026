@@ -3,6 +3,7 @@ import { useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAlbumFilter, scrollToGroup } from '@/lib/albumStore';
+import { useCollection } from '@/contexts/CollectionContext';
 import type { FilterType } from '@/lib/types';
 
 function MoonIcon() {
@@ -43,6 +44,7 @@ export default function Header() {
   const isAlbum = pathname === '/album';
   const [filter, setFilter] = useAlbumFilter();
   const groupScrollRef = useRef<HTMLDivElement>(null);
+  const { isSaving, isGuest } = useCollection();
 
   const scrollGroupsLeft = () => groupScrollRef.current?.scrollBy({ left: -100, behavior: 'smooth' });
   const scrollGroupsRight = () => groupScrollRef.current?.scrollBy({ left: 100, behavior: 'smooth' });
@@ -58,6 +60,13 @@ export default function Header() {
           <div className="text-[9px] font-bold bg-[#00B8D4] text-white px-1.5 py-0.5 rounded-sm leading-none">
             BETA
           </div>
+          {/* Saving indicator — only shown for logged-in users while writes are in flight */}
+          {!isGuest && isSaving && (
+            <div className="flex items-center gap-1 text-[10px] font-medium text-zinc-400 dark:text-zinc-500">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+              Guardando
+            </div>
+          )}
         </div>
         {/*
           No JS conditional on `theme` — both icons always in the DOM.
