@@ -44,13 +44,19 @@ export default function Header() {
   const isAlbum = pathname === '/album';
   const [filter, setFilter] = useAlbumFilter();
   const groupScrollRef = useRef<HTMLDivElement>(null);
-  const { isSaving, isGuest } = useCollection();
+  const { isSaving, isGuest, saveError } = useCollection();
 
   const scrollGroupsLeft = () => groupScrollRef.current?.scrollBy({ left: -100, behavior: 'smooth' });
   const scrollGroupsRight = () => groupScrollRef.current?.scrollBy({ left: 100, behavior: 'smooth' });
 
   return (
     <header className="sticky top-0 z-50 bg-white/95 dark:bg-zinc-950/95 backdrop-blur border-b border-zinc-200 dark:border-zinc-800">
+      {/* DB error banner — only visible when a write fails, helps diagnose issues */}
+      {saveError && (
+        <div className="bg-red-500 text-white text-[11px] font-mono px-3 py-1.5 leading-snug break-all">
+          ⚠️ {saveError}
+        </div>
+      )}
       {/* Row 1: Brand + theme toggle */}
       <div className="flex items-center justify-between px-4 h-12">
         <div className="flex items-center gap-1.5">

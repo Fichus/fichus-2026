@@ -73,6 +73,7 @@ interface CollectionContextType {
   collection: CollectionState;
   loading: boolean;
   isSaving: boolean;
+  saveError: string | null;
   isGuest: boolean;
   addSticker: (code: string) => void;
   removeSticker: (code: string) => void;
@@ -105,6 +106,8 @@ export function CollectionProvider({
   // Count of in-flight writes (pending debounces + active upserts).
   // Exposed as `isSaving` so the UI can show a "Guardando..." indicator.
   const [savingCount, setSavingCount] = useState(0);
+  // Last upsert error — shown in the UI so we can diagnose DB issues.
+  const [saveError, setSaveError] = useState<string | null>(null);
   const isGuest = !userId;
   const supabase = createClient();
 
@@ -163,12 +166,16 @@ export function CollectionProvider({
           const isNewAccount = existingCount === 0;
           if (isNewAccount && Array.isArray(entries) && entries.length > 0) {
             const CHUNK = 500;
+            const now = new Date().toISOString();
             for (let i = 0; i < entries.length; i += CHUNK) {
               const { error } = await supabase.from('collection').upsert(
-                entries.slice(i, i + CHUNK).map((e) => ({ user_id: userId, ...e })),
+                entries.slice(i, i + CHUNK).map((e) => ({ user_id: userId, ...e, updated_at: now })),
                 { onConflict: 'user_id,sticker_num' }
               );
-              if (error) console.error('[guest import]', error);
+              if (error) {
+                console.error('[guest import]', error);
+                setSaveError(`Error importando: ${error.message} (${error.code})`);
+              }
             }
           }
         } catch (e) {
@@ -283,10 +290,13 @@ export function CollectionProvider({
         syncingRef.current.add(code);
         try {
           const { error } = await supabase.from('collection').upsert(
-            { user_id: userId, ...entry },
+            { user_id: userId, ...entry, updated_at: new Date().toISOString() },
             { onConflict: 'user_id,sticker_num' }
           );
-          if (error) console.error('[upsert error]', error.code, error.message, error.details);
+          if (error) {
+            console.error('[upsert error]', error.code, error.message, error.details);
+            setSaveError(`Error al guardar ${code}: ${error.message} (${error.code})`);
+          }
         } finally {
           syncingRef.current.delete(code);
           setSavingCount((c) => Math.max(0, c - 1));
@@ -349,11 +359,15 @@ export function CollectionProvider({
       });
       updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
       if (isGuest) return;
+      const now = new Date().toISOString();
       const { error } = await supabase.from('collection').upsert(
-        updates.map((e) => ({ user_id: userId, ...e })),
+        updates.map((e) => ({ user_id: userId, ...e, updated_at: now })),
         { onConflict: 'user_id,sticker_num' }
       );
-      if (error) console.error('[completeTeam error]', error.code, error.message);
+      if (error) {
+        console.error('[completeTeam error]', error.code, error.message);
+        setSaveError(`Error completeTeam: ${error.message} (${error.code})`);
+      }
     },
     [cancelAllPending, userId, supabase, isGuest]
   );
@@ -375,11 +389,15 @@ export function CollectionProvider({
       });
       updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
       if (isGuest) return;
+      const now = new Date().toISOString();
       const { error } = await supabase.from('collection').upsert(
-        updates.map((e) => ({ user_id: userId, ...e })),
+        updates.map((e) => ({ user_id: userId, ...e, updated_at: now })),
         { onConflict: 'user_id,sticker_num' }
       );
-      if (error) console.error('[completeCodes error]', error.code, error.message);
+      if (error) {
+        console.error('[completeCodes error]', error.code, error.message);
+        setSaveError(`Error completeCodes: ${error.message} (${error.code})`);
+      }
     },
     [cancelAllPending, userId, supabase, isGuest]
   );
@@ -395,11 +413,15 @@ export function CollectionProvider({
       })) as CollectionEntry[];
       updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
       if (isGuest) return;
+      const now = new Date().toISOString();
       const { error: errClear } = await supabase.from('collection').upsert(
-        updates.map((e) => ({ user_id: userId, ...e })),
+        updates.map((e) => ({ user_id: userId, ...e, updated_at: now })),
         { onConflict: 'user_id,sticker_num' }
       );
-      if (errClear) console.error('[clearCodes error]', errClear.code, errClear.message);
+      if (errClear) {
+        console.error('[clearCodes error]', errClear.code, errClear.message);
+        setSaveError(`Error clearCodes: ${errClear.message} (${errClear.code})`);
+      }
     },
     [cancelAllPending, userId, supabase, isGuest]
   );
@@ -416,11 +438,15 @@ export function CollectionProvider({
       })) as CollectionEntry[];
       updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
       if (isGuest) return;
+      const now = new Date().toISOString();
       const { error: errCT } = await supabase.from('collection').upsert(
-        updates.map((e) => ({ user_id: userId, ...e })),
+        updates.map((e) => ({ user_id: userId, ...e, updated_at: now })),
         { onConflict: 'user_id,sticker_num' }
       );
-      if (errCT) console.error('[clearTeam error]', errCT.code, errCT.message);
+      if (errCT) {
+        console.error('[clearTeam error]', errCT.code, errCT.message);
+        setSaveError(`Error clearTeam: ${errCT.message} (${errCT.code})`);
+      }
     },
     [cancelAllPending, userId, supabase, isGuest]
   );
@@ -437,11 +463,13 @@ export function CollectionProvider({
     dispatch({ type: 'LOAD', payload: updates });
     if (isGuest) return;
     const CHUNK = 500;
+    const now = new Date().toISOString();
     for (let i = 0; i < updates.length; i += CHUNK) {
-      await supabase.from('collection').upsert(
-        updates.slice(i, i + CHUNK).map((e) => ({ user_id: userId, ...e })),
+      const { error } = await supabase.from('collection').upsert(
+        updates.slice(i, i + CHUNK).map((e) => ({ user_id: userId, ...e, updated_at: now })),
         { onConflict: 'user_id,sticker_num' }
       );
+      if (error) { console.error('[clearAll error]', error.code, error.message); setSaveError(`Error clearAll: ${error.message} (${error.code})`); }
     }
   }, [cancelAllPending, userId, supabase, isGuest]);
 
@@ -462,11 +490,13 @@ export function CollectionProvider({
     updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
     if (isGuest) return;
     const CHUNK = 500;
+    const now = new Date().toISOString();
     for (let i = 0; i < updates.length; i += CHUNK) {
-      await supabase.from('collection').upsert(
-        updates.slice(i, i + CHUNK).map((e) => ({ user_id: userId, ...e })),
+      const { error } = await supabase.from('collection').upsert(
+        updates.slice(i, i + CHUNK).map((e) => ({ user_id: userId, ...e, updated_at: now })),
         { onConflict: 'user_id,sticker_num' }
       );
+      if (error) { console.error('[completeAll error]', error.code, error.message); setSaveError(`Error completeAll: ${error.message} (${error.code})`); }
     }
   }, [cancelAllPending, userId, supabase, isGuest]);
 
@@ -487,11 +517,13 @@ export function CollectionProvider({
     updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
     if (isGuest) return;
     const CHUNK = 500;
+    const now = new Date().toISOString();
     for (let i = 0; i < updates.length; i += CHUNK) {
-      await supabase.from('collection').upsert(
-        updates.slice(i, i + CHUNK).map((e) => ({ user_id: userId, ...e })),
+      const { error } = await supabase.from('collection').upsert(
+        updates.slice(i, i + CHUNK).map((e) => ({ user_id: userId, ...e, updated_at: now })),
         { onConflict: 'user_id,sticker_num' }
       );
+      if (error) { console.error('[addOneAll error]', error.code, error.message); setSaveError(`Error addOneAll: ${error.message} (${error.code})`); }
     }
   }, [cancelAllPending, userId, supabase, isGuest]);
 
@@ -504,11 +536,13 @@ export function CollectionProvider({
     updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
     if (isGuest) return;
     const CHUNK = 500;
+    const now = new Date().toISOString();
     for (let i = 0; i < updates.length; i += CHUNK) {
-      await supabase.from('collection').upsert(
-        updates.slice(i, i + CHUNK).map((e) => ({ user_id: userId, ...e })),
+      const { error } = await supabase.from('collection').upsert(
+        updates.slice(i, i + CHUNK).map((e) => ({ user_id: userId, ...e, updated_at: now })),
         { onConflict: 'user_id,sticker_num' }
       );
+      if (error) { console.error('[removeOneAll error]', error.code, error.message); setSaveError(`Error removeOneAll: ${error.message} (${error.code})`); }
     }
   }, [cancelAllPending, userId, supabase, isGuest]);
 
@@ -522,11 +556,13 @@ export function CollectionProvider({
     updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
     if (isGuest) return;
     const CHUNK = 500;
+    const now = new Date().toISOString();
     for (let i = 0; i < updates.length; i += CHUNK) {
-      await supabase.from('collection').upsert(
-        updates.slice(i, i + CHUNK).map((e) => ({ user_id: userId, ...e })),
+      const { error } = await supabase.from('collection').upsert(
+        updates.slice(i, i + CHUNK).map((e) => ({ user_id: userId, ...e, updated_at: now })),
         { onConflict: 'user_id,sticker_num' }
       );
+      if (error) { console.error('[clearStats error]', error.code, error.message); setSaveError(`Error clearStats: ${error.message} (${error.code})`); }
     }
   }, [cancelAllPending, userId, supabase, isGuest]);
 
@@ -578,6 +614,7 @@ export function CollectionProvider({
         collection,
         loading,
         isSaving: savingCount > 0,
+        saveError,
         isGuest,
         addSticker,
         removeSticker,
