@@ -27,8 +27,17 @@ type Action =
 
 function reducer(state: CollectionState, action: Action): CollectionState {
   switch (action.type) {
-    case 'LOAD':
-      return Object.fromEntries(action.payload.map((e) => [e.sticker_num, e]));
+    case 'LOAD': {
+      // Use an accumulator instead of Object.fromEntries so that if the DB
+      // returns duplicate rows for the same sticker_num (no unique constraint),
+      // we always keep the row with the highest count rather than a random one.
+      const map: CollectionState = {};
+      for (const e of action.payload) {
+        const cur = map[e.sticker_num];
+        if (!cur || e.count > cur.count) map[e.sticker_num] = e;
+      }
+      return map;
+    }
     case 'SET':
       return { ...state, [action.payload.sticker_num]: action.payload };
     case 'INCREMENT': {
