@@ -4,6 +4,7 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useReducer,
   useRef,
   useState,
@@ -109,7 +110,10 @@ export function CollectionProvider({
   // Last upsert error — shown in the UI so we can diagnose DB issues.
   const [saveError, setSaveError] = useState<string | null>(null);
   const isGuest = !userId;
-  const supabase = createClient();
+  // Memoized so the same client instance is reused across re-renders.
+  // Re-creating on every render was causing auth/closure issues with debounce timers.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const supabase = useMemo(() => createClient(), []);
 
   // Debounce timers keyed by sticker code
   const pendingRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
