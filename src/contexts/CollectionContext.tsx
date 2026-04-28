@@ -117,6 +117,9 @@ export function CollectionProvider({
   const syncingRef = useRef<Set<string>>(new Set());
   // After bulk ops, suppress real-time events briefly to avoid stale queue interference
   const suppressUntilRef = useRef(0);
+  // Sticker codes that are confirmed to exist as rows in the DB.
+  // Used by scheduleSync to decide UPDATE vs INSERT without needing a unique constraint.
+  const dbKeysRef = useRef<Set<string>>(new Set());
 
   // Always-current snapshot of collection — updated every render, safe to read
   // from async callbacks. Bulk ops and scheduleSync use this instead of the
@@ -210,6 +213,11 @@ export function CollectionProvider({
         // overwrite the in-memory state and the pending debounce timers then
         // fire with entry=undefined → no upsert → data silently lost.
         const dbRows = data as CollectionEntry[];
+
+        // Record which sticker_nums exist in the DB so scheduleSync knows
+        // whether to UPDATE (row exists) or INSERT (new row).
+        dbKeysRef.current = new Set(dbRows.map((e) => e.sticker_num));
+
         const inFlight = new Set([
           ...Object.keys(pendingRef.current),
           ...syncingRef.current,
@@ -289,13 +297,35 @@ export function CollectionProvider({
         }
         syncingRef.current.add(code);
         try {
-          const { error } = await supabase.from('collection').upsert(
-            { user_id: userId, ...entry, updated_at: new Date().toISOString() },
-            { onConflict: 'user_id,sticker_num' }
-          );
-          if (error) {
-            console.error('[upsert error]', error.code, error.message, error.details);
-            setSaveError(`Error al guardar ${code}: ${error.message} (${error.code})`);
+          // Try UPDATE first. If it matched 0 rows the sticker doesn't exist
+          // yet — fall through to INSERT. This avoids needing a unique
+          // constraint for ON CONFLICT resolution.
+          const row = {
+            count: entry.count,
+            history_taps: entry.history_taps,
+            max_dups: entry.max_dups,
+            is_favorite: entry.is_favorite,
+          };
+          const { data: updated, error: updErr } = await supabase
+            .from('collection')
+            .update(row)
+            .eq('user_id', userId!)
+            .eq('sticker_num', code)
+            .select('sticker_num');
+          if (updErr) {
+            console.error('[update error]', updErr.code, updErr.message);
+            setSaveError(`Error guardando ${code}: ${updErr.message} (${updErr.code})`);
+          } else if (!updated || updated.length === 0) {
+            // Row didn't exist — insert it.
+            const { error: insErr } = await supabase
+              .from('collection')
+              .insert({ user_id: userId, sticker_num: code, ...row });
+            if (insErr) {
+              console.error('[insert error]', insErr.code, insErr.message);
+              setSaveError(`Error insertando ${code}: ${insErr.message} (${insErr.code})`);
+            } else {
+              dbKeysRef.current.add(code);
+            }
           }
         } finally {
           syncingRef.current.delete(code);
@@ -337,6 +367,31 @@ export function CollectionProvider({
     [scheduleSync]
   );
 
+  // ── Bulk write helper ────────────────────────────────────────────────────
+  // Avoids the need for a unique constraint by using DELETE + INSERT.
+  // Real-time DELETE events are already ignored in the subscription handler.
+  const bulkSave = useCallback(
+    async (entries: CollectionEntry[], label: string) => {
+      if (!entries.length || isGuest) return;
+      const codes = entries.map((e) => e.sticker_num);
+      const CHUNK = 500;
+      // Delete existing rows for these codes so INSERT never hits a duplicate.
+      await supabase.from('collection').delete().eq('user_id', userId!).in('sticker_num', codes);
+      for (let i = 0; i < entries.length; i += CHUNK) {
+        const { error } = await supabase.from('collection').insert(
+          entries.slice(i, i + CHUNK).map((e) => ({ user_id: userId, ...e }))
+        );
+        if (error) {
+          console.error(`[${label} error]`, error.code, error.message);
+          setSaveError(`Error ${label}: ${error.message} (${error.code})`);
+        } else {
+          entries.slice(i, i + CHUNK).forEach((e) => dbKeysRef.current.add(e.sticker_num));
+        }
+      }
+    },
+    [userId, supabase, isGuest]
+  );
+
   // ── Bulk operations ───────────────────────────────────────────────────────
   // Each one cancels pending debounces first so stale single-sticker syncs
   // can't overwrite the bulk upsert result.
@@ -358,18 +413,9 @@ export function CollectionProvider({
         };
       });
       updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
-      if (isGuest) return;
-      const now = new Date().toISOString();
-      const { error } = await supabase.from('collection').upsert(
-        updates.map((e) => ({ user_id: userId, ...e, updated_at: now })),
-        { onConflict: 'user_id,sticker_num' }
-      );
-      if (error) {
-        console.error('[completeTeam error]', error.code, error.message);
-        setSaveError(`Error completeTeam: ${error.message} (${error.code})`);
-      }
+      await bulkSave(updates, 'completeTeam');
     },
-    [cancelAllPending, userId, supabase, isGuest]
+    [cancelAllPending, bulkSave]
   );
 
   const completeCodes = useCallback(
@@ -388,18 +434,9 @@ export function CollectionProvider({
         };
       });
       updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
-      if (isGuest) return;
-      const now = new Date().toISOString();
-      const { error } = await supabase.from('collection').upsert(
-        updates.map((e) => ({ user_id: userId, ...e, updated_at: now })),
-        { onConflict: 'user_id,sticker_num' }
-      );
-      if (error) {
-        console.error('[completeCodes error]', error.code, error.message);
-        setSaveError(`Error completeCodes: ${error.message} (${error.code})`);
-      }
+      await bulkSave(updates, 'completeCodes');
     },
-    [cancelAllPending, userId, supabase, isGuest]
+    [cancelAllPending, bulkSave]
   );
 
   const clearCodes = useCallback(
@@ -412,18 +449,9 @@ export function CollectionProvider({
         count: 0,
       })) as CollectionEntry[];
       updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
-      if (isGuest) return;
-      const now = new Date().toISOString();
-      const { error: errClear } = await supabase.from('collection').upsert(
-        updates.map((e) => ({ user_id: userId, ...e, updated_at: now })),
-        { onConflict: 'user_id,sticker_num' }
-      );
-      if (errClear) {
-        console.error('[clearCodes error]', errClear.code, errClear.message);
-        setSaveError(`Error clearCodes: ${errClear.message} (${errClear.code})`);
-      }
+      await bulkSave(updates, 'clearCodes');
     },
-    [cancelAllPending, userId, supabase, isGuest]
+    [cancelAllPending, bulkSave]
   );
 
   const clearTeam = useCallback(
@@ -437,18 +465,9 @@ export function CollectionProvider({
         count: 0,
       })) as CollectionEntry[];
       updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
-      if (isGuest) return;
-      const now = new Date().toISOString();
-      const { error: errCT } = await supabase.from('collection').upsert(
-        updates.map((e) => ({ user_id: userId, ...e, updated_at: now })),
-        { onConflict: 'user_id,sticker_num' }
-      );
-      if (errCT) {
-        console.error('[clearTeam error]', errCT.code, errCT.message);
-        setSaveError(`Error clearTeam: ${errCT.message} (${errCT.code})`);
-      }
+      await bulkSave(updates, 'clearTeam');
     },
-    [cancelAllPending, userId, supabase, isGuest]
+    [cancelAllPending, bulkSave]
   );
 
   const clearAll = useCallback(async () => {
@@ -461,17 +480,8 @@ export function CollectionProvider({
       is_favorite: false,
     }));
     dispatch({ type: 'LOAD', payload: updates });
-    if (isGuest) return;
-    const CHUNK = 500;
-    const now = new Date().toISOString();
-    for (let i = 0; i < updates.length; i += CHUNK) {
-      const { error } = await supabase.from('collection').upsert(
-        updates.slice(i, i + CHUNK).map((e) => ({ user_id: userId, ...e, updated_at: now })),
-        { onConflict: 'user_id,sticker_num' }
-      );
-      if (error) { console.error('[clearAll error]', error.code, error.message); setSaveError(`Error clearAll: ${error.message} (${error.code})`); }
-    }
-  }, [cancelAllPending, userId, supabase, isGuest]);
+    await bulkSave(updates, 'clearAll');
+  }, [cancelAllPending, bulkSave]);
 
   const completeAll = useCallback(async () => {
     cancelAllPending();
@@ -488,17 +498,8 @@ export function CollectionProvider({
       };
     });
     updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
-    if (isGuest) return;
-    const CHUNK = 500;
-    const now = new Date().toISOString();
-    for (let i = 0; i < updates.length; i += CHUNK) {
-      const { error } = await supabase.from('collection').upsert(
-        updates.slice(i, i + CHUNK).map((e) => ({ user_id: userId, ...e, updated_at: now })),
-        { onConflict: 'user_id,sticker_num' }
-      );
-      if (error) { console.error('[completeAll error]', error.code, error.message); setSaveError(`Error completeAll: ${error.message} (${error.code})`); }
-    }
-  }, [cancelAllPending, userId, supabase, isGuest]);
+    await bulkSave(updates, 'completeAll');
+  }, [cancelAllPending, bulkSave]);
 
   const addOneAll = useCallback(async () => {
     cancelAllPending();
@@ -515,17 +516,8 @@ export function CollectionProvider({
       };
     });
     updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
-    if (isGuest) return;
-    const CHUNK = 500;
-    const now = new Date().toISOString();
-    for (let i = 0; i < updates.length; i += CHUNK) {
-      const { error } = await supabase.from('collection').upsert(
-        updates.slice(i, i + CHUNK).map((e) => ({ user_id: userId, ...e, updated_at: now })),
-        { onConflict: 'user_id,sticker_num' }
-      );
-      if (error) { console.error('[addOneAll error]', error.code, error.message); setSaveError(`Error addOneAll: ${error.message} (${error.code})`); }
-    }
-  }, [cancelAllPending, userId, supabase, isGuest]);
+    await bulkSave(updates, 'addOneAll');
+  }, [cancelAllPending, bulkSave]);
 
   const removeOneAll = useCallback(async () => {
     cancelAllPending();
@@ -534,17 +526,8 @@ export function CollectionProvider({
       .filter((e) => e.count > 0)
       .map((e) => ({ ...e, count: e.count - 1 }));
     updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
-    if (isGuest) return;
-    const CHUNK = 500;
-    const now = new Date().toISOString();
-    for (let i = 0; i < updates.length; i += CHUNK) {
-      const { error } = await supabase.from('collection').upsert(
-        updates.slice(i, i + CHUNK).map((e) => ({ user_id: userId, ...e, updated_at: now })),
-        { onConflict: 'user_id,sticker_num' }
-      );
-      if (error) { console.error('[removeOneAll error]', error.code, error.message); setSaveError(`Error removeOneAll: ${error.message} (${error.code})`); }
-    }
-  }, [cancelAllPending, userId, supabase, isGuest]);
+    await bulkSave(updates, 'removeOneAll');
+  }, [cancelAllPending, bulkSave]);
 
   const clearStats = useCallback(async () => {
     cancelAllPending();
@@ -554,17 +537,8 @@ export function CollectionProvider({
       history_taps: 0,
     }));
     updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
-    if (isGuest) return;
-    const CHUNK = 500;
-    const now = new Date().toISOString();
-    for (let i = 0; i < updates.length; i += CHUNK) {
-      const { error } = await supabase.from('collection').upsert(
-        updates.slice(i, i + CHUNK).map((e) => ({ user_id: userId, ...e, updated_at: now })),
-        { onConflict: 'user_id,sticker_num' }
-      );
-      if (error) { console.error('[clearStats error]', error.code, error.message); setSaveError(`Error clearStats: ${error.message} (${error.code})`); }
-    }
-  }, [cancelAllPending, userId, supabase, isGuest]);
+    await bulkSave(updates, 'clearStats');
+  }, [cancelAllPending, bulkSave]);
 
   // ── Import from backup ────────────────────────────────────────────────────
   // Cancels pending debounces first (prevents stale syncs racing the import),
@@ -574,32 +548,28 @@ export function CollectionProvider({
     async (data: Record<string, CollectionEntry>) => {
       cancelAllPending();
       suppressUntilRef.current = Date.now() + 8000;
-      const entries = Object.values(data).filter((e) => e.sticker_num);
+      const entries = Object.values(data).filter((e) => e.sticker_num).map((e) => ({
+        sticker_num: e.sticker_num,
+        count: e.count ?? 0,
+        history_taps: e.history_taps ?? 0,
+        max_dups: e.max_dups ?? 0,
+        is_favorite: e.is_favorite ?? false,
+      } as CollectionEntry));
       dispatch({ type: 'LOAD', payload: entries });
-      if (isGuest) return;
-      const CHUNK = 500;
-      for (let i = 0; i < entries.length; i += CHUNK) {
-        await supabase.from('collection').upsert(
-          entries.slice(i, i + CHUNK).map((e) => ({
-            user_id: userId,
-            sticker_num: e.sticker_num,
-            count: e.count ?? 0,
-            history_taps: e.history_taps ?? 0,
-            max_dups: e.max_dups ?? 0,
-            is_favorite: e.is_favorite ?? false,
-            updated_at: new Date().toISOString(),
-          })),
-          { onConflict: 'user_id,sticker_num' }
-        );
-      }
+      await bulkSave(entries, 'import');
       // Reload from DB to get the definitive state after all chunks settled
-      const { data: fresh } = await supabase
-        .from('collection')
-        .select('sticker_num,count,history_taps,max_dups,is_favorite')
-        .eq('user_id', userId);
-      if (fresh) dispatch({ type: 'LOAD', payload: fresh as CollectionEntry[] });
+      if (!isGuest) {
+        const { data: fresh } = await supabase
+          .from('collection')
+          .select('sticker_num,count,history_taps,max_dups,is_favorite')
+          .eq('user_id', userId);
+        if (fresh) {
+          dbKeysRef.current = new Set((fresh as CollectionEntry[]).map((e) => e.sticker_num));
+          dispatch({ type: 'LOAD', payload: fresh as CollectionEntry[] });
+        }
+      }
     },
-    [cancelAllPending, userId, supabase, isGuest]
+    [cancelAllPending, bulkSave, userId, supabase, isGuest]
   );
 
   const getCount = useCallback((code: string) => collection[code]?.count ?? 0, [collection]);
