@@ -130,9 +130,6 @@ export function CollectionProvider({
   const syncingRef = useRef<Set<string>>(new Set());
   // After bulk ops, suppress real-time events briefly to avoid stale queue interference
   const suppressUntilRef = useRef(0);
-  // Sticker codes that are confirmed to exist as rows in the DB.
-  // Used by scheduleSync to decide UPDATE vs INSERT without needing a unique constraint.
-  const dbKeysRef = useRef<Set<string>>(new Set());
 
   // Always-current snapshot of collection — updated every render, safe to read
   // from async callbacks. Bulk ops and scheduleSync use this instead of the
@@ -226,11 +223,6 @@ export function CollectionProvider({
         // overwrite the in-memory state and the pending debounce timers then
         // fire with entry=undefined → no upsert → data silently lost.
         const dbRows = data as CollectionEntry[];
-
-        // Record which sticker_nums exist in the DB so scheduleSync knows
-        // whether to UPDATE (row exists) or INSERT (new row).
-        dbKeysRef.current = new Set(dbRows.map((e) => e.sticker_num));
-
         const inFlight = new Set([
           ...Object.keys(pendingRef.current),
           ...syncingRef.current,
@@ -310,35 +302,13 @@ export function CollectionProvider({
         }
         syncingRef.current.add(code);
         try {
-          // Try UPDATE first. If it matched 0 rows the sticker doesn't exist
-          // yet — fall through to INSERT. This avoids needing a unique
-          // constraint for ON CONFLICT resolution.
-          const row = {
-            count: entry.count,
-            history_taps: entry.history_taps,
-            max_dups: entry.max_dups,
-            is_favorite: entry.is_favorite,
-          };
-          const { data: updated, error: updErr } = await supabase
-            .from('collection')
-            .update(row)
-            .eq('user_id', userId!)
-            .eq('sticker_num', code)
-            .select('sticker_num');
-          if (updErr) {
-            console.error('[update error]', updErr.code, updErr.message);
-            setSaveError(`Error guardando ${code}: ${updErr.message} (${updErr.code})`);
-          } else if (!updated || updated.length === 0) {
-            // Row didn't exist — insert it.
-            const { error: insErr } = await supabase
-              .from('collection')
-              .insert({ user_id: userId, sticker_num: code, ...row });
-            if (insErr) {
-              console.error('[insert error]', insErr.code, insErr.message);
-              setSaveError(`Error insertando ${code}: ${insErr.message} (${insErr.code})`);
-            } else {
-              dbKeysRef.current.add(code);
-            }
+          const { error } = await supabase.from('collection').upsert(
+            { user_id: userId, ...entry },
+            { onConflict: 'user_id,sticker_num' }
+          );
+          if (error) {
+            console.error('[upsert error]', error.code, error.message, error.details);
+            setSaveError(`Error guardando ${code}: ${error.message} (${error.code})`);
           }
         } finally {
           syncingRef.current.delete(code);
@@ -388,17 +358,14 @@ export function CollectionProvider({
       if (!entries.length || isGuest) return;
       const codes = entries.map((e) => e.sticker_num);
       const CHUNK = 500;
-      // Delete existing rows for these codes so INSERT never hits a duplicate.
-      await supabase.from('collection').delete().eq('user_id', userId!).in('sticker_num', codes);
       for (let i = 0; i < entries.length; i += CHUNK) {
-        const { error } = await supabase.from('collection').insert(
-          entries.slice(i, i + CHUNK).map((e) => ({ user_id: userId, ...e }))
+        const { error } = await supabase.from('collection').upsert(
+          entries.slice(i, i + CHUNK).map((e) => ({ user_id: userId, ...e })),
+          { onConflict: 'user_id,sticker_num' }
         );
         if (error) {
           console.error(`[${label} error]`, error.code, error.message);
           setSaveError(`Error ${label}: ${error.message} (${error.code})`);
-        } else {
-          entries.slice(i, i + CHUNK).forEach((e) => dbKeysRef.current.add(e.sticker_num));
         }
       }
     },
@@ -576,10 +543,7 @@ export function CollectionProvider({
           .from('collection')
           .select('sticker_num,count,history_taps,max_dups,is_favorite')
           .eq('user_id', userId);
-        if (fresh) {
-          dbKeysRef.current = new Set((fresh as CollectionEntry[]).map((e) => e.sticker_num));
-          dispatch({ type: 'LOAD', payload: fresh as CollectionEntry[] });
-        }
+        if (fresh) dispatch({ type: 'LOAD', payload: fresh as CollectionEntry[] });
       }
     },
     [cancelAllPending, bulkSave, userId, supabase, isGuest]
