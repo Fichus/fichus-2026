@@ -3,6 +3,7 @@ import { CollectionProvider } from '@/contexts/CollectionContext';
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
 import Onboarding from '@/components/Onboarding';
+import UpdateNotification from '@/components/UpdateNotification';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -17,7 +18,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <main className="flex-1 pb-20">{children}</main>
         <BottomNav />
         <Onboarding />
-        {/* Floating community button — placeholder, will be wired up later */}
+        {/* One-shot bell announcing the views/sort update. Self-dismisses
+            permanently via localStorage once the user closes it. */}
+        <UpdateNotification />
       </div>
     </CollectionProvider>
   );
