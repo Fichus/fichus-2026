@@ -1,18 +1,24 @@
 'use client';
-import React, { forwardRef, useState } from 'react';
-import type { TeamDef } from '@/lib/types';
+import React, { forwardRef, useMemo, useState } from 'react';
+import type { StickerInfo, TeamDef } from '@/lib/types';
 import { getTeamStickers } from '@/lib/stickers';
 import { useCollection } from '@/contexts/CollectionContext';
 import StickerCard from './StickerCard';
 import ConfirmDialog from './ConfirmDialog';
+import Flag from './Flag';
+import { sortStickersBySuffix } from '@/lib/sortHelpers';
+import type { SortMode } from '@/lib/albumStore';
 
 interface Props {
   team: TeamDef;
-  visibleCodes?: Set<string> | null; // null = show all
+  /** When set, restricts displayed stickers to this set (filter/search result). */
+  visibleCodes?: Set<string> | null;
+  /** Sticker number ordering inside the team. */
+  sortMode?: SortMode;
 }
 
 const TeamSection = forwardRef<HTMLDivElement, Props>(function TeamSection(
-  { team, visibleCodes },
+  { team, visibleCodes, sortMode = 'az-min' },
   ref
 ) {
   const { getCount, completeTeam, clearTeam } = useCollection();
@@ -24,19 +30,28 @@ const TeamSection = forwardRef<HTMLDivElement, Props>(function TeamSection(
   const isComplete = owned === total;
   const hasAny = owned > 0;
 
-  const filtered = visibleCodes
-    ? stickers.filter((s) => visibleCodes.has(s.code))
-    : stickers;
+  // Apply visibility filter then sort. The sort must happen here (not in the
+  // page) so each team's grid runs through the same ordering as its siblings.
+  const displayed: StickerInfo[] = useMemo(() => {
+    const list = visibleCodes ? stickers.filter((s) => visibleCodes.has(s.code)) : stickers;
+    return sortStickersBySuffix(list, sortMode);
+  }, [stickers, visibleCodes, sortMode]);
 
-  if (filtered.length === 0) return null;
+  if (displayed.length === 0) return null;
 
   return (
     <div ref={ref} className="px-3 mb-2">
-      {/* Team header */}
+      {/* Team header — always shows: code · name · flag emoji · "Grupo X" */}
       <div className="flex items-center gap-1.5 py-2">
-        <span className="text-xl leading-none">{team.flag}</span>
-        <span className="font-bold text-sm text-zinc-800 dark:text-zinc-100 flex-1 truncate">
+        <span className="text-[11px] font-bold text-zinc-400 dark:text-zinc-500 leading-none w-9">
+          {team.code}
+        </span>
+        <span className="flex-1 min-w-0 truncate font-bold text-sm text-zinc-800 dark:text-zinc-100">
           {team.name}
+          <span className="ml-1.5 inline-flex items-center gap-1 align-baseline font-medium text-[11px] text-zinc-400 dark:text-zinc-500">
+            <Flag code={team.code} height={11} />
+            Grupo {team.group}
+          </span>
         </span>
         {/* Buttons LEFT of counter */}
         {!isComplete && (
@@ -62,7 +77,7 @@ const TeamSection = forwardRef<HTMLDivElement, Props>(function TeamSection(
 
       {/* Sticker grid */}
       <div className="grid grid-cols-4 gap-1.5">
-        {filtered.map((s) => (
+        {displayed.map((s) => (
           <StickerCard key={s.code} sticker={s} />
         ))}
       </div>

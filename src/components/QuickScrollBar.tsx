@@ -1,7 +1,8 @@
 'use client';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useAlbumVisibleGroups } from '@/lib/albumStore';
 
-const GROUPS = ['FCW', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'CC'];
+const ALL_GROUPS = ['FCW', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'CC'];
 
 interface Props {
   onSelect: (group: string) => void;
@@ -10,12 +11,18 @@ interface Props {
 export default function QuickScrollBar({ onSelect }: Props) {
   const [visible, setVisible] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // null = no filter active → show everything; Set = restrict to these groups.
+  const visibleGroups = useAlbumVisibleGroups();
+
+  const groups = visibleGroups
+    ? ALL_GROUPS.filter((g) => visibleGroups.has(g))
+    : ALL_GROUPS;
 
   const show = useCallback(() => {
     if (window.scrollY < 100) { setVisible(false); return; }
     setVisible(true);
     if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => setVisible(false), 1500);
+    hideTimer.current = setTimeout(() => setVisible(false), 3000);
   }, []);
 
   useEffect(() => {
@@ -29,8 +36,12 @@ export default function QuickScrollBar({ onSelect }: Props) {
   const handleSelect = (g: string) => {
     onSelect(g);
     if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => setVisible(false), 800);
+    hideTimer.current = setTimeout(() => setVisible(false), 1500);
   };
+
+  // If a filter dropped everything, hide the bar entirely — clicking on a group
+  // that has nothing to show would just scroll to a missing/hidden header.
+  if (groups.length === 0) return null;
 
   return (
     <div
@@ -40,7 +51,7 @@ export default function QuickScrollBar({ onSelect }: Props) {
       style={{ right: 'max(2px, calc((100vw - 480px) / 2 + 2px))' }}
     >
       <div className="flex flex-col items-center gap-0 bg-white/70 dark:bg-zinc-800/70 backdrop-blur-sm rounded-full py-1 px-0.5 shadow-sm">
-        {GROUPS.map((g) => (
+        {groups.map((g) => (
           <button
             key={g}
             onClick={() => handleSelect(g)}

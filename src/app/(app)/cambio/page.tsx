@@ -1,8 +1,10 @@
 'use client';
 import React, { useMemo, useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import { useCollection } from '@/contexts/CollectionContext';
 import GuestLock from '@/components/GuestLock';
+import QrScanner from '@/components/QrScanner';
 import { createClient } from '@/lib/supabase/client';
 import { ALL_STICKERS, STICKER_MAP } from '@/lib/stickers';
 
@@ -10,6 +12,8 @@ export default function CambioPage() {
   const { collection, isGuest } = useCollection();
   const [userId, setUserId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const router = useRouter();
   const supabase = createClient();
 
   useEffect(() => {
@@ -44,6 +48,21 @@ export default function CambioPage() {
     });
   };
 
+  /* When the scanner reads a QR, accept either a full /cambio/<uuid> URL or
+     just a bare UUID. Anything else gets discarded with an alert so users
+     don't end up navigating to unrelated sites. */
+  const handleScan = (raw: string) => {
+    setScanning(false);
+    const text = raw.trim();
+    const uuidRe = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+    const match = text.match(uuidRe);
+    if (!match) {
+      alert('QR no reconocido. Asegurate de escanear un QR de Fichus2026.');
+      return;
+    }
+    router.push(`/cambio/${match[0]}`);
+  };
+
   if (isGuest) {
     return (
       <GuestLock>
@@ -58,7 +77,11 @@ export default function CambioPage() {
     <div className="px-4 pt-4 pb-4">
       <h1 className="text-lg font-bold text-zinc-900 dark:text-white mb-4">🔄 Mi Cambio</h1>
 
-      {/* QR + Trade link */}
+      {/* QR + Trade link.
+          Layout (top → bottom): description, QR, full-width Scan button, link+copy.
+          The Scan button is sandwiched between the QR and the link so the
+          two "exchange your code with another user" affordances (show your
+          QR, scan theirs) live next to each other. */}
       <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4">
         <p className="text-[13px] text-zinc-500 dark:text-zinc-400 mb-3">
           Compartí este QR o link para que otros puedan comparar su colección con la tuya
@@ -74,6 +97,21 @@ export default function CambioPage() {
             <div className="w-[186px] h-[186px] bg-zinc-100 dark:bg-zinc-800 rounded-xl animate-pulse" />
           </div>
         )}
+        <button
+          onClick={() => setScanning(true)}
+          className="w-full mb-3 py-2.5 rounded-xl bg-[#00B8D4] text-white text-sm font-semibold flex items-center justify-center gap-2 active:scale-[0.99] transition-transform"
+          aria-label="Escanear código QR"
+        >
+          {/* Minimalist line-style camera icon */}
+          <svg
+            width="18" height="18" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+          >
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+            <circle cx="12" cy="13" r="4" />
+          </svg>
+          Escanear código
+        </button>
         <div className="flex gap-2">
           <div className="flex-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl px-3 py-2 text-[13px] text-zinc-600 dark:text-zinc-300 truncate font-mono">
             {tradeUrl || 'Cargando…'}
@@ -131,6 +169,10 @@ export default function CambioPage() {
           </div>
         )}
       </div>
+
+      {scanning && (
+        <QrScanner onResult={handleScan} onClose={() => setScanning(false)} />
+      )}
     </div>
   );
 }

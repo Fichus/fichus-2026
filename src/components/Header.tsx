@@ -1,9 +1,16 @@
 'use client';
-import { useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useAlbumFilter, scrollToGroup } from '@/lib/albumStore';
+import {
+  useAlbumFilter,
+  useAlbumViewMode,
+  useAlbumSortMode,
+  useAlbumSearch,
+  type ViewMode,
+  type SortMode,
+} from '@/lib/albumStore';
 import { useCollection } from '@/contexts/CollectionContext';
+import DropdownSelect from '@/components/DropdownSelect';
 import type { FilterType } from '@/lib/types';
 
 function MoonIcon() {
@@ -36,27 +43,37 @@ const FILTERS: { key: FilterType; label: string }[] = [
   { key: 'repeated', label: 'Repes' },
 ];
 
-const GROUP_KEYS = ['FCW', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'CC'];
+const VIEW_OPTIONS: { value: ViewMode; label: string }[] = [
+  { value: 'groups',    label: 'Por grupos' },
+  { value: 'countries', label: 'Por países' },
+];
+
+const SORT_OPTIONS: { value: SortMode; label: string }[] = [
+  { value: 'az-min', label: 'A-Z · 1→20' },
+  { value: 'az-max', label: 'A-Z · 20→1' },
+  { value: 'za-min', label: 'Z-A · 1→20' },
+  { value: 'za-max', label: 'Z-A · 20→1' },
+];
 
 export default function Header() {
   const { toggleTheme } = useTheme();
   const pathname = usePathname();
   const isAlbum = pathname === '/album';
   const [filter, setFilter] = useAlbumFilter();
-  const groupScrollRef = useRef<HTMLDivElement>(null);
+  const [viewMode, setViewMode] = useAlbumViewMode();
+  const [sortMode, setSortMode] = useAlbumSortMode();
+  const [search, setSearch] = useAlbumSearch();
   const { isSaving, isGuest, saveError } = useCollection();
-
-  const scrollGroupsLeft = () => groupScrollRef.current?.scrollBy({ left: -100, behavior: 'smooth' });
-  const scrollGroupsRight = () => groupScrollRef.current?.scrollBy({ left: 100, behavior: 'smooth' });
 
   return (
     <header className="sticky top-0 z-50 bg-white/95 dark:bg-zinc-950/95 backdrop-blur border-b border-zinc-200 dark:border-zinc-800">
-      {/* DB error banner — only visible when a write fails, helps diagnose issues */}
+      {/* DB error banner — only when a write fails. */}
       {saveError && (
         <div className="bg-red-500 text-white text-[11px] font-mono px-3 py-1.5 leading-snug break-all">
           ⚠️ {saveError}
         </div>
       )}
+
       {/* Row 1: Brand + theme toggle */}
       <div className="flex items-center justify-between px-4 h-12">
         <div className="flex items-center gap-1.5">
@@ -66,7 +83,6 @@ export default function Header() {
           <div className="text-[9px] font-bold bg-[#00B8D4] text-white px-1.5 py-0.5 rounded-sm leading-none">
             BETA
           </div>
-          {/* Saving indicator — only shown for logged-in users while writes are in flight */}
           {!isGuest && isSaving && (
             <div className="flex items-center gap-1 text-[10px] font-medium text-zinc-400 dark:text-zinc-500">
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
@@ -75,9 +91,8 @@ export default function Header() {
           )}
         </div>
         {/*
-          No JS conditional on `theme` — both icons always in the DOM.
-          Tailwind dark: classes control visibility via CSS.
-          Server and client produce identical HTML → zero hydration mismatch.
+          Both icons always in the DOM; Tailwind dark: classes pick which one
+          shows. Server and client render identically → no hydration mismatch.
         */}
         <button
           onClick={toggleTheme}
@@ -89,10 +104,12 @@ export default function Header() {
         </button>
       </div>
 
-      {/* Rows 2 + 3: only on the album page */}
+      {/* Album-only rows: filter pills, sticky search, view+sort dropdowns.
+          Search sits ABOVE the dropdowns so the user lands on it without
+          scanning past the metadata controls every time they want to filter. */}
       {isAlbum && (
         <>
-          {/* Row 2: Filter pills */}
+          {/* Row 2: Filter pills (Todas / Faltan / Repes) */}
           <div className="flex justify-center gap-2 px-4 pb-2">
             {FILTERS.map((f) => (
               <button
@@ -109,36 +126,31 @@ export default function Header() {
             ))}
           </div>
 
-          {/* Row 3: Group nav with ‹ › arrows */}
-          <div className="flex items-center gap-0.5 px-1 pb-2">
-            <button
-              onClick={scrollGroupsLeft}
-              className="flex-shrink-0 w-7 h-7 flex items-center justify-center text-zinc-400 dark:text-zinc-500 text-lg font-bold"
-              aria-label="Anterior"
-            >
-              ‹
-            </button>
-            <div
-              ref={groupScrollRef}
-              className="flex-1 overflow-x-auto flex gap-1.5 no-scrollbar"
-            >
-              {GROUP_KEYS.map((g) => (
-                <button
-                  key={g}
-                  onClick={() => scrollToGroup(g)}
-                  className="flex-shrink-0 px-3 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-[13px] font-bold text-zinc-600 dark:text-zinc-400 active:bg-[#00B8D4] active:text-white transition-colors"
-                >
-                  {g}
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={scrollGroupsRight}
-              className="flex-shrink-0 w-7 h-7 flex items-center justify-center text-zinc-400 dark:text-zinc-500 text-lg font-bold"
-              aria-label="Siguiente"
-            >
-              ›
-            </button>
+          {/* Row 3: Sticky search */}
+          <div className="px-3 pb-2">
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar jugador, código…"
+              className="w-full rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 text-sm px-4 py-2 outline-none focus:ring-2 focus:ring-[#00B8D4]/50"
+            />
+          </div>
+
+          {/* Row 4: View + Sort dropdowns (custom, not native <select>) */}
+          <div className="flex items-center gap-2 px-3 pb-2">
+            <DropdownSelect<ViewMode>
+              value={viewMode}
+              options={VIEW_OPTIONS}
+              onChange={setViewMode}
+              ariaLabel="Vista"
+            />
+            <DropdownSelect<SortMode>
+              value={sortMode}
+              options={SORT_OPTIONS}
+              onChange={setSortMode}
+              ariaLabel="Orden"
+            />
           </div>
         </>
       )}

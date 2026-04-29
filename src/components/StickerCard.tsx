@@ -1,8 +1,7 @@
 'use client';
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback } from 'react';
 import type { StickerInfo } from '@/lib/types';
 import { useCollection } from '@/contexts/CollectionContext';
-import StickerModal from './StickerModal';
 
 interface Props {
   sticker: StickerInfo;
@@ -59,11 +58,6 @@ function StickerCard({ sticker }: Props) {
   const { getCount, isFavorite, addSticker, removeSticker, toggleFavorite } = useCollection();
   const count = getCount(sticker.code);
   const favorite = isFavorite(sticker.code);
-  const [showModal, setShowModal] = useState(false);
-
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const didLongPress = useRef(false);
-  const startPos = useRef({ x: 0, y: 0 });
 
   const isOwned   = count > 0;
   const isExtra   = sticker.section === 'extra';
@@ -113,38 +107,12 @@ function StickerCard({ sticker }: Props) {
     dividerColor = 'text-zinc-400/60 dark:text-zinc-500/60';
   }
 
-  // ── Long press / tap handlers ─────────────────────────────────────────────
-  const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    if ((e.target as HTMLElement).closest('button')) return;
-    didLongPress.current = false;
-    startPos.current = { x: e.clientX, y: e.clientY };
-    longPressTimer.current = setTimeout(() => {
-      didLongPress.current = true;
-      setShowModal(true);
-    }, 500);
-  }, []);
-
-  const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    if (!longPressTimer.current) return;
-    const dx = Math.abs(e.clientX - startPos.current.x);
-    const dy = Math.abs(e.clientY - startPos.current.y);
-    if (dx > 8 || dy > 8) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  }, []);
-
-  const handlePointerUp = useCallback(() => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  }, []);
-
+  // ── Tap handler ───────────────────────────────────────────────────────────
+  // Long-press to open a detail modal was removed — taps anywhere on the card
+  // (except the +/−/heart buttons) just add the sticker.
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       if ((e.target as HTMLElement).closest('button')) return;
-      if (didLongPress.current) return;
       addSticker(sticker.code);
     },
     [addSticker, sticker.code]
@@ -156,14 +124,10 @@ function StickerCard({ sticker }: Props) {
   const subLabel  = isExtra ? '' : sticker.role;
 
   return (
-    <>
-      <div
-        className={`relative flex flex-col rounded-xl cursor-pointer select-none transition-colors duration-150 ${bgClass} shadow-sm overflow-hidden aspect-[3/4]`}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onClick={handleClick}
-      >
+    <div
+      className={`relative flex flex-col rounded-xl cursor-pointer select-none transition-colors duration-150 ${bgClass} shadow-sm overflow-hidden aspect-[3/4]`}
+      onClick={handleClick}
+    >
         {/* Fav heart — top-left */}
         <button
           className="absolute top-1 left-1.5 leading-none z-10"
@@ -220,13 +184,8 @@ function StickerCard({ sticker }: Props) {
           >
             +
           </button>
-        </div>
       </div>
-
-      {showModal && (
-        <StickerModal sticker={sticker} onClose={() => setShowModal(false)} />
-      )}
-    </>
+    </div>
   );
 }
 

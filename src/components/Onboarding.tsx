@@ -1,6 +1,7 @@
 'use client';
 import React, { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { registerOnboardingTrigger } from '@/lib/onboardingStore';
 
 const STEPS = [
   {
@@ -13,13 +14,13 @@ const STEPS = [
     emoji: '📌',
     title: 'Marcá tus figuritas',
     desc: 'Tocá una carta para sumar +1. Usá los botones + y − para ajustar. El círculo de arriba a la derecha muestra cuántas repetidas tenés.',
-    tip: '💡 Mantené apretada una carta para ver su detalle completo.',
+    tip: '💡 Tocá el ♡ para marcarla como favorita.',
   },
   {
-    emoji: '🤍',
-    title: 'Favoritas y Filtros',
-    desc: 'Usá el ♡ para marcar una figurita como favorita. Los filtros Todas / Faltan / Repes muestran solo lo que necesitás.',
-    tip: '💡 Los botones de grupo (A, B, C…) te llevan directo a cada sección del álbum.',
+    emoji: '🔍',
+    title: 'Filtros y orden',
+    desc: 'Los filtros Todas / Faltan / Repes muestran solo lo que necesitás. Usá los desplegables para ver "Por grupos" o "Por países" y ordenar de A-Z o Z-A.',
+    tip: '💡 Mientras scrolleás, aparece una barra a la derecha con accesos rápidos a cada grupo.',
   },
   {
     emoji: '⭐',
@@ -30,7 +31,7 @@ const STEPS = [
   {
     emoji: '🔄',
     title: 'Cambio y Stats',
-    desc: 'Cambio genera un QR o link para compartir: otros pueden ver tus repetidas y lo que te falta para coordinar intercambios. En Stats encontrás tu progreso general.',
+    desc: 'En Cambio compartís tu QR o escaneás el de otra persona para comparar colecciones y coordinar intercambios. En Stats está tu progreso general.',
     tip: null,
   },
 ];
@@ -71,6 +72,15 @@ export default function Onboarding() {
       }
     };
     check();
+
+    // Register a hook so other parts of the app (e.g. Config → "Cómo usar")
+    // can replay the tutorial without us exposing a ref.
+    registerOnboardingTrigger(() => {
+      setStep(0);
+      setShowSetup(false);
+      setShow(true);
+    });
+    return () => registerOnboardingTrigger(null);
   }, []);
 
   const finish = async () => {

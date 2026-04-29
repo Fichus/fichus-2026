@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useCollection } from '@/contexts/CollectionContext';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import { triggerOnboarding } from '@/lib/onboardingStore';
 import type { CollectionEntry } from '@/lib/types';
 
 type Section = 'main' | 'profile' | 'howto' | 'support';
@@ -230,15 +231,25 @@ export default function ConfigPage() {
           ← Volver
         </button>
         <h1 className="text-lg font-bold text-zinc-900 dark:text-white mb-4">❓ Cómo usar</h1>
+
+        {/* Re-launch the same onboarding flow shown on first run. */}
+        <button
+          onClick={() => triggerOnboarding()}
+          className="w-full mb-4 py-3 rounded-xl bg-[#00B8D4] text-white text-sm font-semibold active:scale-[0.99] transition-transform"
+        >
+          ▶ Ver tutorial
+        </button>
+
         <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm text-sm text-zinc-700 dark:text-zinc-300 space-y-3">
           <p>📌 <strong>Tocar una figurita</strong> suma 1. Usá los botones + y − para ajustar la cantidad.</p>
-          <p>👆 <strong>Mantener apretado</strong> abre el detalle completo de la figurita.</p>
           <p>🔵 <strong>El círculo de arriba a la derecha</strong> muestra cuántas repetidas tenés de esa figurita.</p>
           <p>🤍 <strong>Usá el ♡</strong> para marcar una figurita como favorita.</p>
           <p>🔍 <strong>Filtros</strong> Todas / Faltan / Repes muestran solo lo que necesitás.</p>
+          <p>📂 <strong>Vista</strong> elegí entre &ldquo;Por grupos&rdquo; (con headers A-L) o &ldquo;Por países&rdquo; (lista plana alfabética).</p>
+          <p>↕ <strong>Orden</strong> A-Z o Z-A para los países/grupos, y 1→20 o 20→1 para los números dentro de cada equipo.</p>
           <p>✓ <strong>Completar / Vaciar</strong> (en cada sección) marca o limpia todas las figuritas del grupo.</p>
           <p>⭐ <strong>Extrastickers</strong> — 21 jugadores especiales con 4 versiones cada uno: Base, Bronce, Plata y Oro.</p>
-          <p>🔄 <strong>Cambio</strong> genera un QR o link para compartir: otros pueden ver tus repetidas y lo que te falta para coordinar intercambios.</p>
+          <p>🔄 <strong>Cambio</strong> genera un QR o link para compartir, o escaneás el de otra persona para comparar colecciones.</p>
           <p>📊 <strong>Stats</strong> — encontrás tu progreso general.</p>
         </div>
       </div>
@@ -340,12 +351,20 @@ export default function ConfigPage() {
           <div className="w-12 h-12 rounded-full bg-[#00B8D4]/15 flex items-center justify-center text-2xl select-none flex-shrink-0">
             👤
           </div>
-          <div className="min-w-0">
+          <div className="flex-1 min-w-0">
             <p className="font-bold text-base text-zinc-900 dark:text-white truncate">
               {displayName || 'Sin nombre'}
             </p>
             <p className="text-xs text-zinc-400 truncate">{userEmail || 'Cargando…'}</p>
           </div>
+          {/* Logout — to the right of the user info, replaces the standalone
+              button that used to live at the bottom of the page. */}
+          <button
+            onClick={handleLogout}
+            className="flex-shrink-0 px-3 py-2 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-500 font-semibold text-xs"
+          >
+            Cerrar sesión
+          </button>
         </div>
       )}
 
@@ -417,8 +436,9 @@ export default function ConfigPage() {
         </div>
       </div>
 
-      {/* Logout / Login */}
-      {isGuest ? (
+      {/* Login/register CTAs only for guests — logged-in users have the
+          "Cerrar sesión" button inline with their user card above. */}
+      {isGuest && (
         <div className="flex gap-2 mb-4">
           <a
             href="/login"
@@ -433,13 +453,6 @@ export default function ConfigPage() {
             Registrarse
           </a>
         </div>
-      ) : (
-        <button
-          onClick={handleLogout}
-          className="w-full py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-red-500 font-medium text-sm mb-4"
-        >
-          Cerrar sesión
-        </button>
       )}
 
       {/* Confirm dialogs */}

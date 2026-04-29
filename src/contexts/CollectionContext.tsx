@@ -162,6 +162,22 @@ export function CollectionProvider({
       return;
     }
 
+    // ── Login transition safety net ─────────────────────────────────────────
+    // When userId changes (guest → logged in, or account A → account B),
+    // immediately clear local state and cancel pending writes BEFORE the
+    // network load. Otherwise, during the ~500ms window while the SELECT is
+    // in flight, the in-memory state still holds the previous user's data —
+    // any tap or stale debounced upsert that fires in that window would write
+    // those previous values to the new user's DB rows, silently overwriting
+    // the canonical online data. Clearing localStorage here too prevents the
+    // import block below from running on a partial guest snapshot.
+    Object.values(pendingRef.current).forEach(clearTimeout);
+    pendingRef.current = {};
+    syncingRef.current.clear();
+    setSavingCount(0);
+    dispatch({ type: 'CLEAR_ALL' });
+    setLoading(true);
+
     const load = async () => {
       // Import guest data ONLY into empty collections (brand-new accounts).
       // Importing into an existing account would overwrite real data with stale
