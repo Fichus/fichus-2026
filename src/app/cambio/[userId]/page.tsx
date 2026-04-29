@@ -11,24 +11,40 @@ export default async function PublicCambioPage({ params }: Props) {
   const { userId } = await params;
   const supabase = await createClient();
 
-  // Fetch target user's collection
-  const { data: targetData } = await supabase
-    .from('collection')
-    .select('sticker_num,count,is_favorite')
-    .eq('user_id', userId);
+  // Fetch target user's collection.
+  // Paginate to bypass PostgREST's 1000-row default cap — full collections
+  // exceed 1000 once enough teams + repeats are tracked, and the lex tail
+  // (URU/USA/UZB) was getting silently dropped.
+  const PAGE = 1000;
+  const targetData: { sticker_num: string; count: number; is_favorite: boolean }[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data: chunk } = await supabase
+      .from('collection')
+      .select('sticker_num,count,is_favorite')
+      .eq('user_id', userId)
+      .range(from, from + PAGE - 1);
+    if (!chunk) break;
+    targetData.push(...chunk);
+    if (chunk.length < PAGE) break;
+  }
 
   // Fetch current viewer's collection (may be null if not logged in)
   const {
     data: { user: viewer },
   } = await supabase.auth.getUser();
 
-  let viewerData: CollectionEntry[] = [];
+  const viewerData: CollectionEntry[] = [];
   if (viewer && viewer.id !== userId) {
-    const { data } = await supabase
-      .from('collection')
-      .select('sticker_num,count,history_taps,max_dups,is_favorite')
-      .eq('user_id', viewer.id);
-    viewerData = (data as CollectionEntry[]) ?? [];
+    for (let from = 0; ; from += PAGE) {
+      const { data: chunk } = await supabase
+        .from('collection')
+        .select('sticker_num,count,history_taps,max_dups,is_favorite')
+        .eq('user_id', viewer.id)
+        .range(from, from + PAGE - 1);
+      if (!chunk) break;
+      viewerData.push(...(chunk as CollectionEntry[]));
+      if (chunk.length < PAGE) break;
+    }
   }
 
   const targetCollection: Record<string, number> = {};

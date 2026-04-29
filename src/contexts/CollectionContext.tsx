@@ -213,16 +213,33 @@ export function CollectionProvider({
         }
       }
 
-      const { data } = await supabase
-        .from('collection')
-        .select('sticker_num,count,history_taps,max_dups,is_favorite')
-        .eq('user_id', userId);
-      if (data) {
+      // Paginate: Supabase/PostgREST caps responses at 1000 rows by default.
+      // A full collection has > 1000 rows once enough teams are completed +
+      // repeats are tracked, so the tail (lexicographic order) gets silently
+      // dropped — that was the "TUR-19+, U* don't load" bug. Fetch in chunks
+      // of 1000 until we get a short page.
+      const PAGE = 1000;
+      const dbRows: CollectionEntry[] = [];
+      for (let from = 0; ; from += PAGE) {
+        const { data: chunk, error } = await supabase
+          .from('collection')
+          .select('sticker_num,count,history_taps,max_dups,is_favorite')
+          .eq('user_id', userId)
+          .range(from, from + PAGE - 1);
+        if (error) {
+          console.error('[load collection]', error.code, error.message);
+          setSaveError(`Error cargando colección: ${error.message} (${error.code})`);
+          break;
+        }
+        if (!chunk) break;
+        dbRows.push(...(chunk as CollectionEntry[]));
+        if (chunk.length < PAGE) break;
+      }
+      {
         // Preserve any optimistic updates the user made while the DB query was
         // in flight. If we just dispatch LOAD with raw DB rows, those rows
         // overwrite the in-memory state and the pending debounce timers then
         // fire with entry=undefined → no upsert → data silently lost.
-        const dbRows = data as CollectionEntry[];
         const inFlight = new Set([
           ...Object.keys(pendingRef.current),
           ...syncingRef.current,
@@ -537,13 +554,22 @@ export function CollectionProvider({
       } as CollectionEntry));
       dispatch({ type: 'LOAD', payload: entries });
       await bulkSave(entries, 'import');
-      // Reload from DB to get the definitive state after all chunks settled
+      // Reload from DB to get the definitive state after all chunks settled.
+      // Paginate to dodge the 1000-row PostgREST cap.
       if (!isGuest) {
-        const { data: fresh } = await supabase
-          .from('collection')
-          .select('sticker_num,count,history_taps,max_dups,is_favorite')
-          .eq('user_id', userId);
-        if (fresh) dispatch({ type: 'LOAD', payload: fresh as CollectionEntry[] });
+        const PAGE = 1000;
+        const fresh: CollectionEntry[] = [];
+        for (let from = 0; ; from += PAGE) {
+          const { data: chunk } = await supabase
+            .from('collection')
+            .select('sticker_num,count,history_taps,max_dups,is_favorite')
+            .eq('user_id', userId)
+            .range(from, from + PAGE - 1);
+          if (!chunk) break;
+          fresh.push(...(chunk as CollectionEntry[]));
+          if (chunk.length < PAGE) break;
+        }
+        dispatch({ type: 'LOAD', payload: fresh });
       }
     },
     [cancelAllPending, bulkSave, userId, supabase, isGuest]
