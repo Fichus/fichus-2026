@@ -19,6 +19,7 @@ import {
   toggleAlbumGroupCollapsed,
   setAlbumVisibleGroups,
   registerScrollToGroup,
+  useAlbumLocked,
 } from '@/lib/albumStore';
 import {
   sortStickersBySuffix,
@@ -48,8 +49,9 @@ export default function AlbumPage() {
   const [sortMode] = useAlbumSortMode();
   const [search] = useAlbumSearch();
   const collapsedGroups = useAlbumCollapsedGroups();
+  const [locked] = useAlbumLocked();
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
-  const [confirmAction, setConfirmAction] = useState<{ section: 'FCW' | 'CC'; type: 'complete' | 'clear' } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ section: 'FWC' | 'CC'; type: 'complete' | 'clear' } | null>(null);
 
   const fcwStickers = useMemo(() => getFCWStickers(), []);
   const ccStickers  = useMemo(() => getCCStickers(),  []);
@@ -129,23 +131,56 @@ export default function AlbumPage() {
     return map;
   }, [hasFilter, hasSearch, applyFilter]);
 
-  /* ── Visible groups (for the right-side QuickScrollBar) ─────────────────
-     Publishes the set of group keys that have at least one visible sticker
-     under the current filter/search. The sidebar reads it via the store. */
+  /* ── Visible groups / letters for the QuickScrollBar ────────────────────
+     Builds the right-side list according to view mode:
+       - groups view: group keys (FWC, A..L, CC) that have visible content
+       - countries view: first letters of country names (A, B, C, ...) that
+         have at least one visible team, plus FWC at the top and CC at the
+         bottom when those sections are visible. Letters point to scroll
+         anchors registered on the FIRST team starting with each letter. */
   useEffect(() => {
-    if (!hasFilter && !hasSearch) {
-      setAlbumVisibleGroups(null); // null = show all groups
+    const fcwVisible = !((hasFilter || hasSearch) && visibleFCW.length === 0);
+    const ccVisible  = !((hasFilter || hasSearch) && visibleCC.length  === 0);
+
+    if (viewMode === 'countries') {
+      const lettersOrdered: string[] = [];
+      const seen = new Set<string>();
+      const sortedTeams = [...ALL_TEAMS].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+      const teamsToWalk = sortMode.startsWith('za') ? [...sortedTeams].reverse() : sortedTeams;
+      for (const t of teamsToWalk) {
+        const set = teamVisible.get(t.code);
+        const hasContent = set ? set.size > 0 : true;
+        if (!hasContent) continue;
+        const letter = (t.name[0] || '').toUpperCase();
+        if (!letter || seen.has(letter)) continue;
+        seen.add(letter);
+        lettersOrdered.push(letter);
+      }
+      const list: string[] = [];
+      // Match the on-page order: FWC at top in A-Z, swapped under Z-A.
+      const azDir = sortMode.startsWith('az');
+      if (azDir && fcwVisible) list.push('FWC');
+      list.push(...lettersOrdered);
+      if (!azDir && fcwVisible) list.push('FWC');
+      if (ccVisible) list.push('CC');
+      setAlbumVisibleGroups(list);
       return;
     }
-    const visible = new Set<string>();
-    if (visibleFCW.length > 0) visible.add('FCW');
-    if (visibleCC.length  > 0) visible.add('CC');
-    for (const [groupId, teams] of Object.entries(GROUPS)) {
-      const anyVisible = teams.some((t) => (teamVisible.get(t.code)?.size ?? 0) > 0);
-      if (anyVisible) visible.add(groupId);
+
+    // Groups view — group keys in their on-page order.
+    const azDir = sortMode.startsWith('az');
+    const orderedGroups = (azDir ? Object.keys(GROUPS) : [...Object.keys(GROUPS)].reverse());
+    const list: string[] = [];
+    if (azDir && fcwVisible) list.push('FWC');
+    for (const groupId of orderedGroups) {
+      const teams = GROUPS[groupId];
+      const anyVisible = teams.some((t) => (teamVisible.get(t.code)?.size ?? Infinity) > 0);
+      if (anyVisible) list.push(groupId);
     }
-    setAlbumVisibleGroups(visible);
-  }, [hasFilter, hasSearch, visibleFCW.length, visibleCC.length, teamVisible]);
+    if (!azDir && fcwVisible) list.push('FWC');
+    if (ccVisible) list.push('CC');
+    setAlbumVisibleGroups(list);
+  }, [viewMode, sortMode, hasFilter, hasSearch, visibleFCW.length, visibleCC.length, teamVisible]);
 
   // On unmount, reset so other pages (or returning here) start clean.
   useEffect(() => () => setAlbumVisibleGroups(null), []);
@@ -153,7 +188,7 @@ export default function AlbumPage() {
   /* ── Confirm handler for FCW/CC ─────────────────────────────────────────── */
   const handleConfirm = async () => {
     if (!confirmAction) return;
-    const codes = confirmAction.section === 'FCW'
+    const codes = confirmAction.section === 'FWC'
       ? fcwStickers.map((s) => s.code)
       : ccStickers.map((s) => s.code);
     if (confirmAction.type === 'complete') await completeCodes(codes);
@@ -163,22 +198,22 @@ export default function AlbumPage() {
 
   /* ── Layout pieces ──────────────────────────────────────────────────────── */
   const renderFCW = () => (
-    <div ref={registerRef('FCW')} className="px-3 mb-2 mt-2 scroll-mt-56">
+    <div ref={registerRef('FWC')} className="px-3 mb-2 mt-2 scroll-mt-56">
       <div className="flex items-center gap-1.5 py-1 mb-1">
         <h2 className="font-bold text-sm text-zinc-700 dark:text-zinc-300 flex-1">
-          🌍 FCW — Introducción &amp; Historia
+          🏆 FWC — Especiales
         </h2>
-        {fcwOwned < fcwStickers.length && (
+        {!locked && fcwOwned < fcwStickers.length && (
           <button
-            onClick={() => setConfirmAction({ section: 'FCW', type: 'complete' })}
+            onClick={() => setConfirmAction({ section: 'FWC', type: 'complete' })}
             className="text-[13px] px-2 py-1 rounded-lg bg-[#00B8D4]/10 text-[#00B8D4] font-semibold"
           >
             ✓ Completar
           </button>
         )}
-        {fcwOwned > 0 && (
+        {!locked && fcwOwned > 0 && (
           <button
-            onClick={() => setConfirmAction({ section: 'FCW', type: 'clear' })}
+            onClick={() => setConfirmAction({ section: 'FWC', type: 'clear' })}
             className="text-[13px] px-2 py-1 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 font-semibold"
           >
             ✕ Vaciar
@@ -204,7 +239,7 @@ export default function AlbumPage() {
         <h2 className="font-bold text-sm text-zinc-700 dark:text-zinc-300 flex-1">
           🥤 Coca-Cola
         </h2>
-        {ccOwned < ccStickers.length && (
+        {!locked && ccOwned < ccStickers.length && (
           <button
             onClick={() => setConfirmAction({ section: 'CC', type: 'complete' })}
             className="text-[13px] px-2 py-1 rounded-lg bg-[#00B8D4]/10 text-[#00B8D4] font-semibold"
@@ -212,7 +247,7 @@ export default function AlbumPage() {
             ✓ Completar
           </button>
         )}
-        {ccOwned > 0 && (
+        {!locked && ccOwned > 0 && (
           <button
             onClick={() => setConfirmAction({ section: 'CC', type: 'clear' })}
             className="text-[13px] px-2 py-1 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 font-semibold"
@@ -249,17 +284,31 @@ export default function AlbumPage() {
   let body: React.ReactNode;
   if (viewMode === 'countries') {
     // Flat alphabetical list. FCW + CC bracket the team list at top/bottom in
-    // A-Z, swap to bottom/top in Z-A.
+    // A-Z, swap to bottom/top in Z-A. As we walk the sorted teams we attach a
+    // scroll anchor to the FIRST team of each starting letter — that's what
+    // the right-side QuickScrollBar jumps to when the user taps a letter.
     const sortedTeams = sortTeamsByName(ALL_TEAMS, sortMode);
+    const lettersAnchored = new Set<string>();
     const teamNodes = sortedTeams.map((team) => {
       const visibleCodes = teamVisible.get(team.code) ?? null;
+      const hasContent = visibleCodes ? visibleCodes.size > 0 : true;
+      const letter = (team.name[0] || '').toUpperCase();
+      // Only the first VISIBLE team of each letter gets the anchor — otherwise
+      // a filtered-out team would silently capture the scroll target.
+      const shouldAnchor = hasContent && letter && !lettersAnchored.has(letter);
+      if (shouldAnchor) lettersAnchored.add(letter);
       return (
-        <TeamSection
+        <div
           key={team.code}
-          team={team}
-          visibleCodes={visibleCodes}
-          sortMode={sortMode}
-        />
+          ref={shouldAnchor ? registerRef(letter) : undefined}
+          className={shouldAnchor ? 'scroll-mt-56' : undefined}
+        >
+          <TeamSection
+            team={team}
+            visibleCodes={visibleCodes}
+            sortMode={sortMode}
+          />
+        </div>
       );
     });
     body = (

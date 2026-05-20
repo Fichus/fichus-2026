@@ -1,4 +1,5 @@
 'use client';
+import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useTheme } from '@/contexts/ThemeContext';
 import {
@@ -6,11 +7,13 @@ import {
   useAlbumViewMode,
   useAlbumSortMode,
   useAlbumSearch,
+  useAlbumLocked,
   type ViewMode,
   type SortMode,
 } from '@/lib/albumStore';
 import { useCollection } from '@/contexts/CollectionContext';
 import DropdownSelect from '@/components/DropdownSelect';
+import ShareModal from '@/components/ShareModal';
 import type { FilterType } from '@/lib/types';
 
 function MoonIcon() {
@@ -63,6 +66,8 @@ export default function Header() {
   const [viewMode, setViewMode] = useAlbumViewMode();
   const [sortMode, setSortMode] = useAlbumSortMode();
   const [search, setSearch] = useAlbumSearch();
+  const [locked, setLocked] = useAlbumLocked();
+  const [shareOpen, setShareOpen] = useState(false);
   const { isSaving, isGuest, saveError } = useCollection();
 
   return (
@@ -90,18 +95,65 @@ export default function Header() {
             </div>
           )}
         </div>
-        {/*
-          Both icons always in the DOM; Tailwind dark: classes pick which one
-          shows. Server and client render identically → no hydration mismatch.
-        */}
-        <button
-          onClick={toggleTheme}
-          className="w-9 h-9 rounded-full flex items-center justify-center bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300"
-          aria-label="Cambiar tema"
-        >
-          <span className="dark:hidden"><MoonIcon /></span>
-          <span className="hidden dark:inline-flex"><SunIcon /></span>
-        </button>
+        {/* Right-side action cluster — lock + share + theme.
+            Lock is album-only; share is album-only (uses the collection).
+            Theme is always available. */}
+        <div className="flex items-center gap-1.5">
+          {isAlbum && (
+            <button
+              onClick={() => setLocked(!locked)}
+              aria-label={locked ? 'Desbloquear toques' : 'Bloquear toques'}
+              className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
+                locked
+                  ? 'bg-[#00B8D4] text-white'
+                  : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300'
+              }`}
+            >
+              {locked ? (
+                /* Closed padlock — anti-mistap mode active */
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+              ) : (
+                /* Open padlock */
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+                </svg>
+              )}
+            </button>
+          )}
+          {isAlbum && (
+            <button
+              onClick={() => setShareOpen(true)}
+              aria-label="Compartir colección"
+              className="w-9 h-9 rounded-full flex items-center justify-center bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300"
+            >
+              {/* Minimalist share icon (three connected dots) */}
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="18" cy="5" r="3" />
+                <circle cx="6" cy="12" r="3" />
+                <circle cx="18" cy="19" r="3" />
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+              </svg>
+            </button>
+          )}
+          {/*
+            Both theme icons always in the DOM; Tailwind dark: classes pick
+            which one shows. Server and client render identically → zero
+            hydration mismatch.
+          */}
+          <button
+            onClick={toggleTheme}
+            className="w-9 h-9 rounded-full flex items-center justify-center bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300"
+            aria-label="Cambiar tema"
+          >
+            <span className="dark:hidden"><MoonIcon /></span>
+            <span className="hidden dark:inline-flex"><SunIcon /></span>
+          </button>
+        </div>
       </div>
 
       {/* Album-only rows: filter pills, sticky search, view+sort dropdowns.
@@ -154,6 +206,7 @@ export default function Header() {
           </div>
         </>
       )}
+      {shareOpen && <ShareModal onClose={() => setShareOpen(false)} />}
     </header>
   );
 }

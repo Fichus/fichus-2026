@@ -1,8 +1,10 @@
 'use client';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useCollection } from '@/contexts/CollectionContext';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import GuestLock from '@/components/GuestLock';
+import Flag from '@/components/Flag';
 import { ALL_STICKERS, GROUPS, STICKER_MAP, EXTRA_PLAYERS } from '@/lib/stickers';
 
 const GROUP_KEYS = Object.keys(GROUPS);
@@ -11,6 +13,7 @@ const EXTRA_TOTAL = EXTRA_PLAYERS.length * 4;
 export default function StatsPage() {
   const { collection, clearStats, isGuest } = useCollection();
   const [confirmClearTaps, setConfirmClearTaps] = useState(false);
+  const [showGroupsGrid, setShowGroupsGrid] = useState(false);
 
   // ── Overview stats ──────────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -55,7 +58,7 @@ export default function StatsPage() {
       const code = `FCW-${String(i).padStart(2, '0')}`;
       return (collection[code]?.count ?? 0) > 0 ? 1 : 0 as number;
     }).reduce((a: number, b: number) => a + b, 0);
-    groups.push({ id: 'FCW', total: 20, owned: fcwOwned, pct: fcwOwned / 20 });
+    groups.push({ id: 'FWC', total: 20, owned: fcwOwned, pct: fcwOwned / 20 });
 
     // CC
     const ccOwned = Array.from({ length: 14 }, (_, i) => {
@@ -81,6 +84,24 @@ export default function StatsPage() {
     return Object.values(collection)
       .filter((e) => e.max_dups > 1)
       .sort((a, b) => b.max_dups - a.max_dups)
+      .slice(0, 8)
+      .map((e) => ({ ...e, info: STICKER_MAP.get(e.sticker_num) }));
+  }, [collection]);
+
+  // ── Top 8 LEAST duplicated ─────────────────────────────────────────────────
+  // "Las que menos me han salido repetidas" — stickers I have owned at some
+  // point but barely (or never) got duplicates of. We filter on history_taps
+  // > 0 so this represents stickers the user actually opened/touched, not
+  // ones never seen. Sort by max_dups ASC, ties broken by history_taps DESC
+  // (more taps for the same max_dups = more "tried but no luck" → more
+  // interesting / lucky finding).
+  const leastDups = useMemo(() => {
+    return Object.values(collection)
+      .filter((e) => e.history_taps > 0)
+      .sort((a, b) => {
+        if (a.max_dups !== b.max_dups) return a.max_dups - b.max_dups;
+        return b.history_taps - a.history_taps;
+      })
       .slice(0, 8)
       .map((e) => ({ ...e, info: STICKER_MAP.get(e.sticker_num) }));
   }, [collection]);
@@ -152,9 +173,24 @@ export default function StatsPage() {
       </div>
 
       {/* Top 8 rankings — side by side */}
-      <div className="grid grid-cols-2 gap-2.5 mb-4">
+      <div className="grid grid-cols-2 gap-2.5 mb-2.5">
         <RankingBlock title="🔥 Más tocadas" subtitle="Histórico total de toques" entries={topTapped} valueKey="history_taps" color="text-[#00B8D4]" getName={stickerName} getSub={stickerSub} onClear={() => setConfirmClearTaps(true)} />
         <RankingBlock title="📦 Más repetidas" subtitle="Repetidas que tenés ahora" entries={topDups} valueKey="max_dups" color="text-violet-500" getName={stickerName} getSub={stickerSub} />
+      </div>
+
+      {/* Least-repeated ranking — full width, sits below the side-by-side
+          duo. Value shown is max_dups (how many copies you ever owned at
+          once). 1 = pure luck, never duplicated. */}
+      <div className="mb-4">
+        <RankingBlock
+          title="🍀 Las menos repetidas"
+          subtitle="Las que tocaste pero casi nunca te salieron repetidas"
+          entries={leastDups}
+          valueKey="max_dups"
+          color="text-emerald-500"
+          getName={stickerName}
+          getSub={stickerSub}
+        />
       </div>
 
       {confirmClearTaps && (
@@ -166,11 +202,28 @@ export default function StatsPage() {
         />
       )}
 
-      {/* Vertical group chart */}
+      {/* Vertical group chart with a "show grid" button to flip into a
+          per-group team listing — handy for remembering which country is in
+          which group while sorting / comparing trade lists. */}
       <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4">
-        <h2 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 mb-4">
-          Progreso por grupo
-        </h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-bold text-sm text-zinc-800 dark:text-zinc-100">
+            Progreso por grupo
+          </h2>
+          <button
+            onClick={() => setShowGroupsGrid(true)}
+            className="text-[12px] font-semibold text-[#00B8D4] active:opacity-70 flex items-center gap-1"
+            aria-label="Ver tabla de grupos"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="7" rx="1" />
+              <rect x="14" y="3" width="7" height="7" rx="1" />
+              <rect x="3" y="14" width="7" height="7" rx="1" />
+              <rect x="14" y="14" width="7" height="7" rx="1" />
+            </svg>
+            Ver grupos
+          </button>
+        </div>
         <div className="flex items-end gap-1 h-20">
           {groupStats.map(({ id, pct }) => {
             const barH = Math.max(2, Math.round((pct / maxPct) * 72));
@@ -189,7 +242,94 @@ export default function StatsPage() {
           })}
         </div>
       </div>
+
+      {showGroupsGrid && (
+        <GroupsGridModal onClose={() => setShowGroupsGrid(false)} />
+      )}
     </div>
+  );
+}
+
+/**
+ * Quick-reference modal showing every group as a card with its four teams
+ * (FIFA code + flag + name). Read-only.
+ *
+ * Layout: a flex column with a fixed header, a flex-1 scrollable body for the
+ * 12 group cards, and a fixed-at-bottom Cerrar button. Earlier version put
+ * `overflow-y-auto` on the whole sheet with `max-h-[85vh]` and items-end on
+ * the parent — that resulted in the top group cards being clipped off-screen
+ * AND the touch scroll not engaging because there was no clear scrollable
+ * region. The fixed header + scrollable middle pattern is the standard
+ * bottom-sheet layout for this and works reliably on touch devices.
+ *
+ * Rendered via createPortal so no ancestor's transform/backdrop-filter can
+ * trap its `position: fixed`.
+ */
+function GroupsGridModal({ onClose }: { onClose: () => void }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-[480px] bg-white dark:bg-zinc-900 rounded-t-2xl shadow-xl flex flex-col"
+        style={{ maxHeight: '85svh' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Fixed header */}
+        <div className="flex-shrink-0 px-5 pt-4 pb-2">
+          <div className="w-10 h-1 bg-zinc-300 dark:bg-zinc-700 rounded-full mx-auto mb-3" />
+          <h2 className="text-lg font-bold text-zinc-900 dark:text-white text-center mb-1">
+            Grupos del Mundial
+          </h2>
+          <p className="text-[12px] text-zinc-500 dark:text-zinc-400 text-center">
+            Referencia rápida de qué país está en cada grupo
+          </p>
+        </div>
+        {/* Scrollable body */}
+        <div
+          className="flex-1 overflow-y-auto px-5 py-2"
+          style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}
+        >
+          <div className="grid grid-cols-2 gap-2">
+            {Object.entries(GROUPS).map(([id, teams]) => (
+              <div key={id} className="bg-zinc-50 dark:bg-zinc-800 rounded-xl p-3">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-[#00B8D4] mb-2">
+                  Grupo {id}
+                </p>
+                <ul className="space-y-1.5">
+                  {teams.map((t) => (
+                    <li key={t.code} className="flex items-center gap-1.5">
+                      <Flag code={t.code} height={10} />
+                      <span className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 w-9">
+                        {t.code}
+                      </span>
+                      <span className="text-[12px] text-zinc-800 dark:text-zinc-100 truncate">
+                        {t.name}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* Fixed footer */}
+        <div className="flex-shrink-0 px-5 pt-2 pb-5">
+          <button
+            onClick={onClose}
+            className="w-full py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-sm font-semibold"
+          >
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 

@@ -2,6 +2,7 @@
 import React, { useCallback } from 'react';
 import type { StickerInfo } from '@/lib/types';
 import { useCollection } from '@/contexts/CollectionContext';
+import { useAlbumLocked } from '@/lib/albumStore';
 
 interface Props {
   sticker: StickerInfo;
@@ -56,6 +57,7 @@ const EXTRA_STYLES: Record<string, {
 
 function StickerCard({ sticker }: Props) {
   const { getCount, isFavorite, addSticker, removeSticker, toggleFavorite } = useCollection();
+  const [locked] = useAlbumLocked();
   const count = getCount(sticker.code);
   const favorite = isFavorite(sticker.code);
 
@@ -108,14 +110,19 @@ function StickerCard({ sticker }: Props) {
   }
 
   // ── Tap handler ───────────────────────────────────────────────────────────
-  // Long-press to open a detail modal was removed — taps anywhere on the card
-  // (except the +/−/heart buttons) just add the sticker.
+  // Tap anywhere on the card body (except +/−/heart buttons) adds the
+  // sticker — unless the lock toggle is on (anti-mistap mode), in which case
+  // body taps are ignored so the user can scroll without registering hits.
+  // The explicit +/−/heart buttons still work even when locked because they
+  // stop event propagation; this is intentional so deliberate edits remain
+  // available.
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       if ((e.target as HTMLElement).closest('button')) return;
+      if (locked) return;
       addSticker(sticker.code);
     },
-    [addSticker, sticker.code]
+    [addSticker, sticker.code, locked]
   );
 
   // ── Card content labels ───────────────────────────────────────────────────
@@ -125,14 +132,22 @@ function StickerCard({ sticker }: Props) {
 
   return (
     <div
-      className={`relative flex flex-col rounded-xl cursor-pointer select-none transition-colors duration-150 ${bgClass} shadow-sm overflow-hidden aspect-[3/4]`}
+      className={`relative flex flex-col ${locked ? 'cursor-default' : 'cursor-pointer'} rounded-xl select-none transition-colors duration-150 ${bgClass} shadow-sm overflow-hidden aspect-[3/4]`}
       onClick={handleClick}
     >
-        {/* Fav heart — top-left */}
+        {/* Fav heart — top-left. When locked, the heart stays VISIBLE so the
+            user can still see which figus are favorited, but tapping it is a
+            no-op. Body taps are blocked too. The +/− buttons are hidden
+            outright below — they're action-only with no view value. */}
         <button
           className="absolute top-1 left-1.5 leading-none z-10"
-          onClick={(e) => { e.stopPropagation(); toggleFavorite(sticker.code); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (locked) return;
+            toggleFavorite(sticker.code);
+          }}
           aria-label="Favorita"
+          aria-disabled={locked}
         >
           {favorite ? (
             <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" className="text-red-400">
@@ -167,7 +182,11 @@ function StickerCard({ sticker }: Props) {
           )}
         </div>
 
-        {/* Bottom: [−] | [+] rounded-full buttons near edges */}
+        {/* Bottom: [−] | [+] rounded-full buttons near edges.
+            Hidden completely when the lock is on — the card grows by ~24px so
+            the center label has more room and the missing-buttons aren't an
+            empty grey strip. */}
+        {!locked && (
         <div className="flex items-center px-1.5 pb-1.5 gap-1">
           <button
             className={`flex-1 h-6 rounded-full flex items-center justify-center text-sm font-bold active:opacity-70 z-10 ${btnBg} ${btnText}`}
@@ -184,7 +203,8 @@ function StickerCard({ sticker }: Props) {
           >
             +
           </button>
-      </div>
+        </div>
+        )}
     </div>
   );
 }

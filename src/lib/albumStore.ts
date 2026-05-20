@@ -63,7 +63,7 @@ export function useAlbumSearch(): [string, (q: string) => void] {
 }
 
 // ── Collapsed groups ──────────────────────────────────────────────────────────
-// Set of group keys ('FCW', 'A', ..., 'L', 'CC') that are collapsed (only the
+// Set of group keys ('FWC', 'A', ..., 'L', 'CC') that are collapsed (only the
 // header shows; teams are hidden). Stored as a Set for O(1) membership checks.
 const collapsedStore = makeStore<ReadonlySet<string>>(new Set());
 export function toggleAlbumGroupCollapsed(group: string) {
@@ -77,13 +77,43 @@ export function useAlbumCollapsedGroups(): ReadonlySet<string> {
   return useSyncExternalStore(collapsedStore.subscribe, collapsedStore.get, collapsedStore.get);
 }
 
-// ── Visible groups (computed by album/page, read by Header for the right-bar) ─
-// The album page knows which groups have any visible content under the current
-// filter/search; it publishes that set so the right-side QuickScrollBar can
-// hide groups with nothing to show. Default = all groups visible.
-const visibleGroupsStore = makeStore<ReadonlySet<string> | null>(null);
-export function setAlbumVisibleGroups(groups: ReadonlySet<string> | null) { visibleGroupsStore.set(groups); }
-export function useAlbumVisibleGroups(): ReadonlySet<string> | null {
+// ── Collapsed teams ───────────────────────────────────────────────────────────
+// Same pattern but per individual team (3-letter FIFA code). Used to hide a
+// single country's sticker grid while keeping the team header visible.
+const collapsedTeamsStore = makeStore<ReadonlySet<string>>(new Set());
+export function toggleAlbumTeamCollapsed(teamCode: string) {
+  const cur = collapsedTeamsStore.get();
+  const next = new Set(cur);
+  if (next.has(teamCode)) next.delete(teamCode);
+  else next.add(teamCode);
+  collapsedTeamsStore.set(next);
+}
+export function useAlbumCollapsedTeams(): ReadonlySet<string> {
+  return useSyncExternalStore(collapsedTeamsStore.subscribe, collapsedTeamsStore.get, collapsedTeamsStore.get);
+}
+
+// ── Lock (anti-mistap) ────────────────────────────────────────────────────────
+// When true, sticker taps are no-ops so the user can scroll without
+// accidentally incrementing counts. +/− buttons and the favorite heart still
+// work — only the body-of-card tap is locked.
+const lockedStore = makeStore<boolean>(false);
+export function setAlbumLocked(v: boolean) { lockedStore.set(v); }
+export function useAlbumLocked(): [boolean, (v: boolean) => void] {
+  return [useSyncExternalStore(lockedStore.subscribe, lockedStore.get, lockedStore.get), setAlbumLocked];
+}
+
+// ── Visible groups / sidebar items (read by QuickScrollBar) ──────────────────
+// The album page publishes an ORDERED list of keys to display in the right-
+// side QuickScrollBar. The keys vary by view mode:
+//   - "Por grupos": ['FWC', 'A', 'B', ..., 'L', 'CC']
+//   - "Por países": ['FWC', 'A', 'B', 'C', 'E', ..., 'U', 'CC']  (only the
+//     letters that have at least one visible team in the current filter)
+// Sending `null` means "no list published yet" — QuickScrollBar falls back to
+// the default group list. Keeps the prop a single ordered list so we don't
+// have to special-case ordering inside the sidebar.
+const visibleGroupsStore = makeStore<ReadonlyArray<string> | null>(null);
+export function setAlbumVisibleGroups(groups: ReadonlyArray<string> | null) { visibleGroupsStore.set(groups); }
+export function useAlbumVisibleGroups(): ReadonlyArray<string> | null {
   return useSyncExternalStore(visibleGroupsStore.subscribe, visibleGroupsStore.get, visibleGroupsStore.get);
 }
 
