@@ -5,6 +5,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useCollection } from '@/contexts/CollectionContext';
 import GuestLock from '@/components/GuestLock';
 import QrScanner from '@/components/QrScanner';
+import PasteTradeModal from '@/components/PasteTradeModal';
 import { createClient } from '@/lib/supabase/client';
 import { ALL_STICKERS, STICKER_MAP } from '@/lib/stickers';
 
@@ -13,6 +14,7 @@ export default function CambioPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [pasteOpen, setPasteOpen] = useState(false);
   const router = useRouter();
   const supabase = createClient();
 
@@ -99,7 +101,7 @@ export default function CambioPage() {
         )}
         <button
           onClick={() => setScanning(true)}
-          className="w-full mb-3 py-2.5 rounded-xl bg-[#00B8D4] text-white text-sm font-semibold flex items-center justify-center gap-2 active:scale-[0.99] transition-transform"
+          className="w-full mb-2 py-2.5 rounded-xl bg-[#00B8D4] text-white text-sm font-semibold flex items-center justify-center gap-2 active:scale-[0.99] transition-transform"
           aria-label="Escanear código QR"
         >
           {/* Minimalist line-style camera icon */}
@@ -111,6 +113,20 @@ export default function CambioPage() {
             <circle cx="12" cy="13" r="4" />
           </svg>
           Escanear código
+        </button>
+        {/* Secondary action: paste another person's text list to detect
+            matchable trades without needing their QR. Subtle styling so it
+            doesn't compete with the primary Escanear button. */}
+        <button
+          onClick={() => setPasteOpen(true)}
+          className="w-full mb-3 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 text-[13px] font-semibold flex items-center justify-center gap-2 active:scale-[0.99] transition-transform"
+          aria-label="Pegar lista de un amigo"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+            <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+          </svg>
+          Pegar lista de un amigo
         </button>
         <div className="flex gap-2">
           <div className="flex-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl px-3 py-2 text-[13px] text-zinc-600 dark:text-zinc-300 truncate font-mono">
@@ -172,6 +188,9 @@ export default function CambioPage() {
 
       {scanning && (
         <QrScanner onResult={handleScan} onClose={() => setScanning(false)} />
+      )}
+      {pasteOpen && (
+        <PasteTradeModal onClose={() => setPasteOpen(false)} />
       )}
     </div>
   );
