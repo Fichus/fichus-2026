@@ -94,7 +94,7 @@ export default function AdminGlobalStats() {
           <span className="text-[10px] text-amber-700/70 dark:text-amber-400/70">Solo vos ves esto</span>
         </div>
         <p className="text-[11.5px] text-amber-800/80 dark:text-amber-300/80 leading-snug mt-0.5">
-          Agregados de toda la base — para decidir qué figus son más buscadas o esquivas.
+          Datos HISTÓRICOS (cuenta cada vez que apareció la figu, no solo lo que está vivo hoy).
         </p>
       </div>
 
@@ -116,15 +116,15 @@ export default function AdminGlobalStats() {
       {!loading && !error && (
         <>
           <StickerSection
-            title="🔥 Top 500 más repetidas (global)"
-            subtitle="Las figus que a la mayoría le sobran. Útil para saber qué se ofrece mucho."
+            title="🔥 Top 500 más repetidas (histórico)"
+            subtitle="Las que más veces aparecieron como repe en toda la historia (suma de extras de todos los users)."
             rows={topRepes}
             valueLabel="repes"
             color="text-[#00B8D4]"
           />
           <StickerSection
-            title="🍀 Top 50 más difíciles de repetir"
-            subtitle="Casi nadie las consigue repetidas (mínimo 3 dueños para descartar ruido)."
+            title="🍀 Top 50 más difíciles de repetir (histórico)"
+            subtitle="Las que casi nadie consiguió como repe en toda la historia (mínimo 3 dueños)."
             rows={hardestRepes}
             valueLabel="repes"
             color="text-emerald-600 dark:text-emerald-400"
@@ -250,7 +250,7 @@ function CountrySection({ rows }: { rows: CountryRow[] }) {
           </span>
         </div>
         <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-tight mt-0.5">
-          Promedio de repes por dueño — el primero es el más esquivo, el último el más intercambiable.
+          Promedio histórico de repes por dueño — el primero es el más esquivo, el último el más intercambiable.
         </p>
       </div>
 
