@@ -54,9 +54,11 @@ export default function StatsPage() {
       return { id: g, total, owned, pct: total > 0 ? owned / total : 0 };
     });
 
-    // FCW
+    // FWC — codes use the FWC- prefix (was FCW- before the May 2026
+    // migration). Using the wrong prefix here was making the group chart
+    // show 0% even when the user had FWC stickers marked.
     const fcwOwned = Array.from({ length: 20 }, (_, i) => {
-      const code = `FCW-${String(i).padStart(2, '0')}`;
+      const code = `FWC-${String(i).padStart(2, '0')}`;
       return (collection[code]?.count ?? 0) > 0 ? 1 : 0 as number;
     }).reduce((a: number, b: number) => a + b, 0);
     groups.push({ id: 'FWC', total: 20, owned: fcwOwned, pct: fcwOwned / 20 });
@@ -90,15 +92,20 @@ export default function StatsPage() {
   }, [collection]);
 
   // ── Top 8 LEAST duplicated ─────────────────────────────────────────────────
-  // "Las que menos me han salido repetidas" — stickers I have owned at some
-  // point but barely (or never) got duplicates of. We filter on history_taps
-  // > 0 so this represents stickers the user actually opened/touched, not
-  // ones never seen. Sort by max_dups ASC, ties broken by history_taps DESC
-  // (more taps for the same max_dups = more "tried but no luck" → more
-  // interesting / lucky finding).
+  // "Las que menos me han salido repetidas" — regular team stickers I've
+  // touched at least once but barely (or never) got duplicates of.
+  // Excludes FWC, CC and extras: those have very small totals (20/14/76)
+  // so they'd always dominate this ranking on a partially-played album.
+  // The ranking is meant to surface lucky finds among the 960 team cards.
+  // Sort by max_dups ASC, ties broken by history_taps DESC (more taps for
+  // the same max_dups = "tried lots, never got a dup" — more interesting).
   const leastDups = useMemo(() => {
     return Object.values(collection)
-      .filter((e) => e.history_taps > 0)
+      .filter((e) => {
+        if (e.history_taps <= 0) return false;
+        const info = STICKER_MAP.get(e.sticker_num);
+        return info?.section === 'team';
+      })
       .sort((a, b) => {
         if (a.max_dups !== b.max_dups) return a.max_dups - b.max_dups;
         return b.history_taps - a.history_taps;

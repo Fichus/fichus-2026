@@ -146,8 +146,8 @@ export function buildShareText(
    Accepts the text format produced by `buildShareText` above OR by the
    Figuritas app (same layout: "Me faltan" section header followed by lines
    like "FWC 🏆: 1, 2, 3" or "MEX 🇲🇽: 1(x2)"). Returns the sticker codes
-   keyed in OUR canonical form (DB still uses FCW-XX even though we display
-   FWC), so callers can cross-reference against `collection` directly.
+   keyed in OUR canonical form (FWC-XX after the May 2026 migration), so
+   callers can cross-reference against `collection` directly.
 */
 
 /** Maps a parsed prefix + number to our canonical sticker code.

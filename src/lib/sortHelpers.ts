@@ -4,7 +4,7 @@ import type { SortMode } from './albumStore';
 /**
  * Extracts the trailing numeric suffix from a sticker code.
  *
- * Codes look like `URU-7`, `FCW-12`, `CC-03`, `EXT-04-ORO`. We always sort by
+ * Codes look like `URU-7`, `FWC-12`, `CC-03`, `EXT-04-ORO`. We always sort by
  * the FIRST run of digits after the first dash. For EXT codes (which carry a
  * variant suffix) the player index is what we want — the variant grouping is
  * handled separately by the album page.
