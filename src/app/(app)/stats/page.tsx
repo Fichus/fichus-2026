@@ -5,6 +5,7 @@ import { useCollection } from '@/contexts/CollectionContext';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import GuestLock from '@/components/GuestLock';
 import Flag from '@/components/Flag';
+import AdminGlobalStats from '@/components/AdminGlobalStats';
 import { useAvoidTutorial } from '@/lib/tutorialAvoidStore';
 import { ALL_STICKERS, GROUPS, STICKER_MAP, EXTRA_PLAYERS } from '@/lib/stickers';
 
@@ -250,6 +251,9 @@ export default function StatsPage() {
           })}
         </div>
       </div>
+
+      {/* Admin-only — renders nothing for non-admin emails. */}
+      <AdminGlobalStats />
 
       {showGroupsGrid && (
         <GroupsGridModal onClose={() => setShowGroupsGrid(false)} />
