@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useCollection } from '@/contexts/CollectionContext';
 import { buildShareText, type ShareMode } from '@/lib/shareText';
+import { useAvoidTutorial } from '@/lib/tutorialAvoidStore';
 
 interface Props {
   onClose: () => void;
@@ -35,6 +36,7 @@ export default function ShareModal({ onClose }: Props) {
   // any ancestor with transform/filter/backdrop-filter.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+  useAvoidTutorial(onClose);
 
   const handlePick = async (mode: ShareMode) => {
     const text = buildShareText(mode, collection);

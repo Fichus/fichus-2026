@@ -20,6 +20,7 @@ import {
   setAlbumVisibleGroups,
   registerScrollToGroup,
   useAlbumLocked,
+  useAlbumShowCC,
 } from '@/lib/albumStore';
 import {
   sortStickersBySuffix,
@@ -50,6 +51,7 @@ export default function AlbumPage() {
   const [search] = useAlbumSearch();
   const collapsedGroups = useAlbumCollapsedGroups();
   const [locked] = useAlbumLocked();
+  const [showCC] = useAlbumShowCC();
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const [confirmAction, setConfirmAction] = useState<{ section: 'FWC' | 'CC'; type: 'complete' | 'clear' } | null>(null);
 
@@ -140,7 +142,9 @@ export default function AlbumPage() {
          anchors registered on the FIRST team starting with each letter. */
   useEffect(() => {
     const fcwVisible = !((hasFilter || hasSearch) && visibleFCW.length === 0);
-    const ccVisible  = !((hasFilter || hasSearch) && visibleCC.length  === 0);
+    // CC sidebar entry only shows if the section itself is showing AND has
+    // visible content under the active filter.
+    const ccVisible  = showCC && !((hasFilter || hasSearch) && visibleCC.length === 0);
 
     if (viewMode === 'countries') {
       const lettersOrdered: string[] = [];
@@ -180,7 +184,7 @@ export default function AlbumPage() {
     if (!azDir && fcwVisible) list.push('FWC');
     if (ccVisible) list.push('CC');
     setAlbumVisibleGroups(list);
-  }, [viewMode, sortMode, hasFilter, hasSearch, visibleFCW.length, visibleCC.length, teamVisible]);
+  }, [viewMode, sortMode, hasFilter, hasSearch, visibleFCW.length, visibleCC.length, teamVisible, showCC]);
 
   // On unmount, reset so other pages (or returning here) start clean.
   useEffect(() => () => setAlbumVisibleGroups(null), []);
@@ -278,7 +282,10 @@ export default function AlbumPage() {
   // - CC stays glued to the end regardless of direction — it's the album
   //   appendix, not a sortable section.
   const showFCW = !((hasFilter || hasSearch) && visibleFCW.length === 0);
-  const showCC  = !((hasFilter || hasSearch) && visibleCC.length === 0);
+  // CC section: user toggle takes precedence — if they hid it from the menu,
+  // it's gone regardless of filter; otherwise we apply the standard "hide if
+  // search/filter returned nothing" rule.
+  const showCCSection = showCC && !((hasFilter || hasSearch) && visibleCC.length === 0);
   const azDirection = sortMode.startsWith('az');
 
   let body: React.ReactNode;
@@ -316,7 +323,7 @@ export default function AlbumPage() {
         {azDirection && showFCW && renderFCW()}
         {teamNodes}
         {!azDirection && showFCW && renderFCW()}
-        {showCC && renderCC()}
+        {showCCSection && renderCC()}
       </>
     );
   } else {
@@ -369,7 +376,7 @@ export default function AlbumPage() {
         {azDirection && showFCW && renderFCW()}
         {groupNodes}
         {!azDirection && showFCW && renderFCW()}
-        {showCC && renderCC()}
+        {showCCSection && renderCC()}
       </>
     );
   }

@@ -19,8 +19,8 @@ import React, { useEffect, useRef, useState } from 'react';
  */
 
 // Bumped key so users who dismissed the previous update notice still see this
-// one (new features: share, lock, team-collapse, country letters sidebar).
-const DISMISS_KEY = 'update-notice-views-sort-v2';
+// one (new features: kebab menu, tap-subtract, hide-CC, paste-trade, etc).
+const DISMISS_KEY = 'update-notice-views-sort-v3';
 
 export default function UpdateNotification() {
   const [available, setAvailable] = useState(false);
@@ -107,14 +107,14 @@ export default function UpdateNotification() {
             Novedades
           </p>
           <h3 className="text-[15px] font-bold text-amber-900 dark:text-amber-100 mb-2 leading-tight">
-            Más herramientas para tu álbum
+            Tus nuevas herramientas
           </h3>
           <ul className="space-y-1.5 text-[12.5px] text-amber-900/90 dark:text-amber-100/90 leading-snug">
-            <li>📋 <strong>Compartir</strong> tus faltantes y repetidas como texto (botón arriba a la derecha).</li>
+            <li>⋮ <strong>Menú</strong> arriba a la derecha: completar álbum, eliminar repes, ocultar CC, modo tocar/restar y más.</li>
+            <li>📋 <strong>Compartir</strong> tus faltantes y repetidas como texto.</li>
+            <li>🤝 En Cambio podés <strong>pegar la lista de un amigo</strong> y ver qué se pueden intercambiar.</li>
             <li>🔒 <strong>Bloquear</strong> los toques para scrollear sin marcar sin querer.</li>
-            <li>▾ <strong>Colapsar</strong> cada equipo (no solo el grupo) con la flechita.</li>
-            <li>🔤 En vista &ldquo;Por países&rdquo; la barra derecha muestra letras del abecedario.</li>
-            <li>🏆 La primera sección ahora es <strong>FWC — Especiales</strong>.</li>
+            <li>🍀 En Stats, ranking de <strong>menos repetidas</strong>.</li>
           </ul>
           <p className="mt-2.5 text-[10.5px] text-amber-700/80 dark:text-amber-400/80">
             Tocá la ✕ para no volver a ver este aviso.

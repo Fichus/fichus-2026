@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { STICKER_MAP, ALL_STICKERS } from '@/lib/stickers';
 import { useTheme } from '@/contexts/ThemeContext';
 import { createClient } from '@/lib/supabase/client';
+import { parseShareText } from '@/lib/shareText';
 import type { CollectionEntry } from '@/lib/types';
 
 function MoonIcon() {
@@ -60,6 +61,9 @@ export default function PublicCambioClient({
   const [selectedGive, setSelectedGive] = useState<Set<string>>(new Set());
   const [confirming, setConfirming] = useState(false);
   const [done, setDone] = useState(false);
+  // Pasted-list match state — lets ANYONE (logged-in or not) drop a text list
+  // from another app and see what they can trade with this collection owner.
+  const [pastedText, setPastedText] = useState('');
 
   const regularStickers = useMemo(
     () => ALL_STICKERS.filter((s) => s.section !== 'extra'),
@@ -99,6 +103,36 @@ export default function PublicCambioClient({
 
   const pct = targetTotal > 0 ? Math.round((targetOwned / targetTotal) * 100) : 0;
   const displayName = targetUsername || 'este usuario';
+
+  /* ── Pasted-list cross-reference ─────────────────────────────────────────
+     The owner of this page is the "target" — everything we already loaded
+     refers to them. The pasted text comes from someone ELSE (the viewer),
+     who lists their own faltantes/repetidas.
+       - "Te puede dar"   = parsed.missing  ∩ target has spare (>1)
+       - "Le podés dar"   = parsed.repeated ∩ target needs (===0)
+     Memoized so re-renders from clicking other buttons don't reparse.
+  */
+  const pastedMatches = useMemo(() => {
+    const text = pastedText.trim();
+    if (!text) return null;
+    const parsed = parseShareText(text);
+    if (parsed.missing.length === 0 && parsed.repeated.length === 0) {
+      return { ownerCanGive: [], otherCanGive: [], empty: true };
+    }
+    const ownerCanGive = parsed.missing.filter((code) => (targetCollection[code] ?? 0) > 1);
+    const otherCanGive = parsed.repeated.filter((code) => (targetCollection[code] ?? 0) === 0);
+    return { ownerCanGive, otherCanGive, empty: false };
+  }, [pastedText, targetCollection]);
+
+  const handlePasteFromClipboard = async () => {
+    try {
+      const clip = await navigator.clipboard.readText();
+      setPastedText(clip);
+    } catch {
+      // Browser blocked the clipboard read (insecure context or no permission).
+      // The textarea is always available as a manual fallback so we just no-op.
+    }
+  };
 
   const toggleReceive = (code: string) => {
     setSelectedReceive((prev) => {
@@ -373,6 +407,69 @@ export default function PublicCambioClient({
           </div>
         )}
 
+        {/* Paste-list match — works for anyone, logged in or not. Especially
+            useful for viewers who don't have a Fichus account but DO have a
+            text export from another app (Figuritas, Panini, etc.). Drops the
+            need to chat through WhatsApp to know what's tradeable. */}
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4">
+          <h2 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 mb-1">
+            📋 Pegá tu lista para comparar
+          </h2>
+          <p className="text-xs text-zinc-400 mb-3 leading-snug">
+            ¿Tenés tu lista en texto (de otra app o de un chat)? Pegala y te digo qué pueden intercambiar con {displayName} — sin necesidad de cuenta.
+          </p>
+          <div className="flex gap-2 mb-2">
+            <button
+              onClick={handlePasteFromClipboard}
+              className="flex-1 py-2 rounded-xl bg-[#00B8D4] text-white text-[13px] font-semibold active:scale-[0.99] transition-transform"
+            >
+              📋 Pegar del portapapeles
+            </button>
+            {pastedText && (
+              <button
+                onClick={() => setPastedText('')}
+                className="px-3 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-[13px] font-semibold"
+              >
+                Limpiar
+              </button>
+            )}
+          </div>
+          <textarea
+            value={pastedText}
+            onChange={(e) => setPastedText(e.target.value)}
+            placeholder={'Ejemplo:\n\nMe faltan\nMEX 🇲🇽: 1, 5, 12\nARG 🇦🇷: 3, 7\n\nRepetidas\nBRA 🇧🇷: 2, 9'}
+            rows={5}
+            className="w-full rounded-xl bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white text-[12px] font-mono px-3 py-2 outline-none focus:ring-2 focus:ring-[#00B8D4]/40 resize-none"
+          />
+
+          {pastedMatches && !pastedMatches.empty && (
+            <div className="mt-3 space-y-3">
+              <PasteResultBlock
+                title={`🎁 ${displayName} te puede dar`}
+                subtitle="Tiene repetidas y vos las necesitás"
+                codes={pastedMatches.ownerCanGive}
+                color="text-[#00B8D4]"
+                bg="bg-[#00B8D4]/10"
+                empty={`${displayName} no tiene repes de lo que necesitás.`}
+              />
+              <PasteResultBlock
+                title={`🤝 Le podés dar a ${displayName}`}
+                subtitle="Tenés repetidas y no las tiene"
+                codes={pastedMatches.otherCanGive}
+                color="text-violet-500"
+                bg="bg-violet-100 dark:bg-violet-900/20"
+                empty={`No tenés repes que ${displayName} necesite.`}
+              />
+            </div>
+          )}
+
+          {pastedMatches && pastedMatches.empty && (
+            <p className="mt-3 text-[12px] text-amber-600 dark:text-amber-400 text-center">
+              No detecté líneas válidas en el texto. Asegurate de que tenga secciones &ldquo;Me faltan&rdquo; o &ldquo;Repetidas&rdquo; con códigos tipo MEX: 1, 2, 3.
+            </p>
+          )}
+        </div>
+
         {/* Footer CTA */}
         <div className="mt-6 pb-8 flex flex-col items-center gap-3">
           <Link
@@ -387,6 +484,53 @@ export default function PublicCambioClient({
         </div>
 
       </div>
+    </div>
+  );
+}
+
+/* ── Helper rendering for the paste-list result blocks ─────────────────────
+   Tiny presentational component. Kept inside this file (rather than shared)
+   because the public page styling is slightly different from the in-app
+   PasteTradeModal (lighter card backgrounds, smaller copy), and pulling out
+   a shared component would force divergent props or theme variants. */
+function PasteResultBlock({
+  title, subtitle, codes, color, bg, empty,
+}: {
+  title: string; subtitle: string; codes: string[]; color: string; bg: string; empty: string;
+}) {
+  return (
+    <div className="bg-zinc-50 dark:bg-zinc-800/60 rounded-xl p-3">
+      <div className="flex items-baseline justify-between mb-1">
+        <h3 className={`font-bold text-[13px] ${color}`}>{title}</h3>
+        <span className="text-[11px] font-bold text-zinc-400 dark:text-zinc-500">
+          {codes.length}
+        </span>
+      </div>
+      <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mb-2 leading-tight">{subtitle}</p>
+      {codes.length === 0 ? (
+        <p className="text-[12px] text-zinc-400">{empty}</p>
+      ) : (
+        <div className="flex flex-wrap gap-1">
+          {codes.map((code) => {
+            const info = STICKER_MAP.get(code);
+            const display = code;
+            const sub = info?.section === 'team'
+              ? info.teamName
+              : info?.section === 'extra'
+              ? info.extraPlayerName
+              : '';
+            return (
+              <span
+                key={code}
+                title={sub}
+                className={`px-2 py-1 rounded-lg ${bg} ${color} text-[11.5px] font-semibold`}
+              >
+                {display}
+              </span>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

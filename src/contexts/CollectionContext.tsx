@@ -96,6 +96,7 @@ interface CollectionContextType {
   completeAll: () => Promise<void>;
   addOneAll: () => Promise<void>;
   removeOneAll: () => Promise<void>;
+  clearRepeated: () => Promise<void>;
   clearStats: () => Promise<void>;
   importCollection: (data: Record<string, CollectionEntry>) => Promise<void>;
   getCount: (code: string) => number;
@@ -532,6 +533,21 @@ export function CollectionProvider({
     await bulkSave(updates, 'addOneAll');
   }, [cancelAllPending, bulkSave]);
 
+  // Caps every owned sticker at count = 1 — i.e. drops all duplicates while
+  // keeping the album state ("which figus do I have at least one of") intact.
+  // Useful after a big trade session where you want a clean reset of repes
+  // without losing your album progress.
+  const clearRepeated = useCallback(async () => {
+    cancelAllPending();
+    suppressUntilRef.current = Date.now() + 5000;
+    const updates: CollectionEntry[] = Object.values(collectionRef.current)
+      .filter((e) => e.count > 1)
+      .map((e) => ({ ...e, count: 1 }));
+    if (updates.length === 0) return;
+    updates.forEach((e) => dispatch({ type: 'SET', payload: e }));
+    await bulkSave(updates, 'clearRepeated');
+  }, [cancelAllPending, bulkSave]);
+
   const removeOneAll = useCallback(async () => {
     cancelAllPending();
     suppressUntilRef.current = Date.now() + 5000;
@@ -616,6 +632,7 @@ export function CollectionProvider({
         clearCodes,
         addOneAll,
         removeOneAll,
+        clearRepeated,
         clearStats,
         importCollection,
         getCount,

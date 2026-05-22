@@ -150,10 +150,13 @@ export function buildShareText(
    FWC), so callers can cross-reference against `collection` directly.
 */
 
-/** Maps a parsed prefix + number to our canonical sticker code. */
+/** Maps a parsed prefix + number to our canonical sticker code.
+ * Accepts both 'FWC' (current) and 'FCW' (legacy / typos) prefixes and emits
+ * the canonical FWC code. Same trick for CC. Other team codes are passed
+ * through unchanged.
+ */
 function toStickerCode(prefix: string, n: number): string {
-  // FWC text → FCW DB key. The DB historically uses FCW, only the UI shows FWC.
-  if (prefix === 'FWC' || prefix === 'FCW') return `FCW-${String(n).padStart(2, '0')}`;
+  if (prefix === 'FWC' || prefix === 'FCW') return `FWC-${String(n).padStart(2, '0')}`;
   if (prefix === 'CC') return `CC-${String(n).padStart(2, '0')}`;
   return `${prefix}-${n}`;
 }
@@ -169,10 +172,29 @@ export function parseShareText(text: string): ParsedShareList {
   const missing: string[] = [];
   const repeated: string[] = [];
 
-  // Section headers used both by us and by the Figuritas app. Case-insensitive
-  // match to be lenient with copy/paste accidents.
-  const MISSING_HEADERS = ['me faltan', 'faltantes', 'me faltan:'];
-  const REPEATED_HEADERS = ['repetidas', 'repes', 'repetidas:'];
+  // Section headers we accept. Includes Spanish (our format, Figuritas) and
+  // English (from international users / other apps like Panini). Case-
+  // insensitive and trims a trailing ':' that some apps include in the
+  // header line. We also accept the question form ("¿Qué te falta?") that
+  // some users type manually.
+  const MISSING_HEADERS = [
+    // Spanish
+    'me faltan', 'faltantes', 'faltan', 'me faltan:', 'faltantes:',
+    'qué me falta', 'que me falta', 'qué te falta', 'que te falta',
+    // English
+    'missing', 'is missing', 'i need', 'i am missing', "i'm missing",
+    'needed', 'wanted', 'need', 'wants',
+  ];
+  const REPEATED_HEADERS = [
+    // Spanish
+    'repetidas', 'repes', 'repetidas:', 'duplicadas', 'sobrantes',
+    // English
+    'repeated', 'repeats', 'duplicates', 'doubles', 'extras',
+    'i have repeated', 'i have doubles', 'spares', 'swaps',
+  ];
+
+  // Normalize: lowercase, strip trailing punctuation, collapse spaces.
+  const norm = (s: string) => s.toLowerCase().replace(/[:.;¡!¿?]+$/g, '').trim();
 
   // A sticker line looks like:
   //   FWC 🏆: 1, 2, 3
@@ -188,7 +210,7 @@ export function parseShareText(text: string): ParsedShareList {
 
   for (const line of lines) {
     if (!line) continue;
-    const lower = line.toLowerCase();
+    const lower = norm(line);
     if (MISSING_HEADERS.includes(lower))  { section = 'missing';  continue; }
     if (REPEATED_HEADERS.includes(lower)) { section = 'repeated'; continue; }
     if (!section) continue;
@@ -211,4 +233,67 @@ export function parseShareText(text: string): ParsedShareList {
   }
 
   return { missing, repeated };
+}
+
+/* ── Full-collection import parser ──────────────────────────────────────────
+   Same syntax as parseShareText but returns a Record<code, count> suitable
+   for importing into the collection state. Preserves the `(xN)` multipliers
+   from the "Repetidas" section so a round-trip export → import keeps the
+   right counts:
+     - "missing" sticker → count = 0
+     - "repeated" sticker with no multiplier → count = 2 (1 base + 1 extra)
+     - "repeated" sticker `N(xK)`              → count = 1 + K
+
+   Stickers not present in either section are NOT returned. The caller
+   decides whether to merge the result into the existing collection (partial
+   import) or to treat the absence as `count = 1` (full backup restore where
+   single-copy stickers were intentionally elided).
+*/
+export function parseShareTextForImport(text: string): Record<string, number> {
+  const lines = text.split(/\r?\n/).map((l) => l.trim());
+  let section: 'missing' | 'repeated' | null = null;
+  const out: Record<string, number> = {};
+
+  const MISSING_HEADERS = [
+    'me faltan', 'faltantes', 'faltan', 'me faltan:', 'faltantes:',
+    'qué me falta', 'que me falta', 'qué te falta', 'que te falta',
+    'missing', 'is missing', 'i need', 'i am missing', "i'm missing",
+    'needed', 'wanted', 'need', 'wants',
+  ];
+  const REPEATED_HEADERS = [
+    'repetidas', 'repes', 'repetidas:', 'duplicadas', 'sobrantes',
+    'repeated', 'repeats', 'duplicates', 'doubles', 'extras',
+    'i have repeated', 'i have doubles', 'spares', 'swaps',
+  ];
+  const norm = (s: string) => s.toLowerCase().replace(/[:.;¡!¿?]+$/g, '').trim();
+  const LINE_RE = /^([A-Z]{2,4})\s*[^A-Z:]*:\s*(.+?)\s*$/;
+  // Captures `N` or `N(xK)`. K is optional.
+  const TOKEN_RE = /(\d+)(?:\s*\(x(\d+)\))?/g;
+
+  for (const line of lines) {
+    if (!line) continue;
+    const lower = norm(line);
+    if (MISSING_HEADERS.includes(lower))  { section = 'missing';  continue; }
+    if (REPEATED_HEADERS.includes(lower)) { section = 'repeated'; continue; }
+    if (!section) continue;
+
+    const m = LINE_RE.exec(line);
+    if (!m) continue;
+    const [, prefix, rest] = m;
+
+    let tok: RegExpExecArray | null;
+    TOKEN_RE.lastIndex = 0;
+    while ((tok = TOKEN_RE.exec(rest)) !== null) {
+      const n = parseInt(tok[1], 10);
+      const code = toStickerCode(prefix, n);
+      if (section === 'missing') {
+        out[code] = 0;
+      } else {
+        const extras = tok[2] ? parseInt(tok[2], 10) : 1;
+        out[code] = 1 + extras;
+      }
+    }
+  }
+
+  return out;
 }

@@ -2,7 +2,7 @@
 import React, { useCallback } from 'react';
 import type { StickerInfo } from '@/lib/types';
 import { useCollection } from '@/contexts/CollectionContext';
-import { useAlbumLocked } from '@/lib/albumStore';
+import { useAlbumLocked, useAlbumTapMode } from '@/lib/albumStore';
 
 interface Props {
   sticker: StickerInfo;
@@ -58,6 +58,7 @@ const EXTRA_STYLES: Record<string, {
 function StickerCard({ sticker }: Props) {
   const { getCount, isFavorite, addSticker, removeSticker, toggleFavorite } = useCollection();
   const [locked] = useAlbumLocked();
+  const [tapMode] = useAlbumTapMode();
   const count = getCount(sticker.code);
   const favorite = isFavorite(sticker.code);
 
@@ -110,19 +111,18 @@ function StickerCard({ sticker }: Props) {
   }
 
   // ── Tap handler ───────────────────────────────────────────────────────────
-  // Tap anywhere on the card body (except +/−/heart buttons) adds the
-  // sticker — unless the lock toggle is on (anti-mistap mode), in which case
-  // body taps are ignored so the user can scroll without registering hits.
-  // The explicit +/−/heart buttons still work even when locked because they
-  // stop event propagation; this is intentional so deliberate edits remain
-  // available.
+  // Tapping the card body adds OR subtracts a sticker depending on tapMode
+  // ('add' by default). Locked mode supersedes both: no taps register at all.
+  // The explicit +/− buttons keep their fixed roles (+ adds, − subtracts) so
+  // there's always a deterministic way to bump in either direction.
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       if ((e.target as HTMLElement).closest('button')) return;
       if (locked) return;
-      addSticker(sticker.code);
+      if (tapMode === 'subtract') removeSticker(sticker.code);
+      else addSticker(sticker.code);
     },
-    [addSticker, sticker.code, locked]
+    [addSticker, removeSticker, sticker.code, locked, tapMode]
   );
 
   // ── Card content labels ───────────────────────────────────────────────────

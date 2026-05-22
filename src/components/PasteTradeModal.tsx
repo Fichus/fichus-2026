@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useCollection } from '@/contexts/CollectionContext';
 import { parseShareText } from '@/lib/shareText';
+import { useAvoidTutorial } from '@/lib/tutorialAvoidStore';
 import { STICKER_MAP } from '@/lib/stickers';
 
 interface Props {
@@ -29,6 +30,7 @@ export default function PasteTradeModal({ onClose }: Props) {
   const [text, setText] = useState('');
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+  useAvoidTutorial(onClose);
 
   const parsed = useMemo(() => {
     if (!text.trim()) return null;
@@ -173,8 +175,7 @@ function ResultBlock({
         <div className="flex flex-wrap gap-1">
           {codes.map((code) => {
             const info = STICKER_MAP.get(code);
-            // Re-display FCW codes as FWC for the UI (matches our album).
-            const display = code.replace(/^FCW-/, 'FWC-');
+            const display = code;
             const sub = info?.section === 'team'
               ? info.teamName
               : info?.section === 'extra'

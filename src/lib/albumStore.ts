@@ -102,6 +102,28 @@ export function useAlbumLocked(): [boolean, (v: boolean) => void] {
   return [useSyncExternalStore(lockedStore.subscribe, lockedStore.get, lockedStore.get), setAlbumLocked];
 }
 
+// ── Show CC (Coca-Cola) section ───────────────────────────────────────────────
+// Toggle from the kebab menu. When false, the CC group is hidden everywhere
+// (album rendering + right-side sidebar). Stickers in the DB are NOT touched —
+// flipping this back to true reveals the existing counts as they were.
+const showCCStore = makeStore<boolean>(true);
+export function setAlbumShowCC(v: boolean) { showCCStore.set(v); }
+export function useAlbumShowCC(): [boolean, (v: boolean) => void] {
+  return [useSyncExternalStore(showCCStore.subscribe, showCCStore.get, showCCStore.get), setAlbumShowCC];
+}
+
+// ── Tap mode (add vs subtract) ────────────────────────────────────────────────
+// Switches what the body-of-card tap does. Default is 'add' (increments the
+// count, the natural collecting mode). 'subtract' decrements — useful for
+// bulk de-stocking after a swap session. The +/−/heart buttons keep their
+// fixed behavior; only the card body is affected.
+export type TapMode = 'add' | 'subtract';
+const tapModeStore = makeStore<TapMode>('add');
+export function setAlbumTapMode(m: TapMode) { tapModeStore.set(m); }
+export function useAlbumTapMode(): [TapMode, (m: TapMode) => void] {
+  return [useSyncExternalStore(tapModeStore.subscribe, tapModeStore.get, tapModeStore.get), setAlbumTapMode];
+}
+
 // ── Visible groups / sidebar items (read by QuickScrollBar) ──────────────────
 // The album page publishes an ORDERED list of keys to display in the right-
 // side QuickScrollBar. The keys vary by view mode:

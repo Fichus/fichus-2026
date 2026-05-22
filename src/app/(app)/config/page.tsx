@@ -4,10 +4,13 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useCollection } from '@/contexts/CollectionContext';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import ImportTextModal, { type UnmentionedMode } from '@/components/ImportTextModal';
 import { triggerOnboarding } from '@/lib/onboardingStore';
+import { buildShareText } from '@/lib/shareText';
+import { ALL_STICKERS } from '@/lib/stickers';
 import type { CollectionEntry } from '@/lib/types';
 
-type Section = 'main' | 'profile' | 'howto' | 'support';
+type Section = 'main' | 'profile' | 'howto' | 'support' | 'news';
 
 export default function ConfigPage() {
   const [section, setSection] = useState<Section>('main');
@@ -22,6 +25,7 @@ export default function ConfigPage() {
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
   const [confirm, setConfirm] = useState<'clearAll' | 'completeAll' | 'addOneAll' | 'removeOneAll' | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const { clearAll, completeAll, addOneAll, removeOneAll, collection, isGuest, importCollection } = useCollection();
   const router = useRouter();
@@ -35,7 +39,7 @@ export default function ConfigPage() {
     // Read ?section= from URL
     const params = new URLSearchParams(window.location.search);
     const s = params.get('section');
-    if (s === 'support' || s === 'howto' || s === 'profile') setSection(s as Section);
+    if (s === 'support' || s === 'howto' || s === 'profile' || s === 'news') setSection(s as Section);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLogout = async () => {
@@ -110,7 +114,37 @@ export default function ConfigPage() {
     });
   };
 
-  const exportData = () => {
+  /* ── Export / import — text-first ────────────────────────────────────────
+     Text export is way easier to share on mobile (paste into WhatsApp /
+     notes / email) than a JSON file download, and the format is the same one
+     used in Cambio so users can swap between apps fluently. JSON is still
+     offered as a "backup completo" because the text format is lossy:
+     EXT-* (extrastickers), history_taps, max_dups and is_favorite are not
+     captured in the share text.
+  */
+  const exportAsText = async () => {
+    const text = buildShareText('both', collection);
+    // Try clipboard first (mobile users almost always prefer paste over
+    // file download). Fall back to file download when clipboard fails.
+    try {
+      await navigator.clipboard.writeText(text);
+      alert('Tu lista fue copiada al portapapeles. Pegala donde quieras guardarla.');
+      return;
+    } catch {
+      // fall through
+    }
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `fichus2026_lista_${new Date().toISOString().split('T')[0]}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importFromText = () => setImportOpen(true);
+
+  const exportAsJson = () => {
     const data = JSON.stringify(collection, null, 2);
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -121,7 +155,7 @@ export default function ConfigPage() {
     URL.revokeObjectURL(url);
   };
 
-  const importData = () => {
+  const importFromJson = () => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json';
@@ -137,6 +171,50 @@ export default function ConfigPage() {
       }
     };
     input.click();
+  };
+
+  /* Applies a parsed text import using the unmentioned-mode picked in the
+     modal. Always preserves extras (EXT-*) and the rest of the metadata
+     (favorites, history_taps) of stickers we touch — only `count` is
+     overwritten. Builds the final map and hands it to importCollection.
+  */
+  const applyTextImport = async (parsed: Record<string, number>, mode: UnmentionedMode) => {
+    const merged: Record<string, CollectionEntry> = { ...collection };
+
+    // 1. Apply explicit values from the parsed text.
+    for (const [code, count] of Object.entries(parsed)) {
+      const cur = merged[code];
+      merged[code] = {
+        sticker_num: code,
+        count,
+        history_taps: cur?.history_taps ?? count,
+        max_dups: Math.max(cur?.max_dups ?? 0, count),
+        is_favorite: cur?.is_favorite ?? false,
+      };
+    }
+
+    // 2. Apply the policy for unmentioned stickers. Extras (EXT-*) are always
+    //    left alone — the share-text format doesn't cover them so applying
+    //    any blanket rule would wipe data the user can't even see in the
+    //    pasted list.
+    if (mode !== 'leave') {
+      const defaultCount = mode === 'owned-1' ? 1 : 0;
+      for (const s of ALL_STICKERS) {
+        if (s.section === 'extra') continue;
+        if (parsed[s.code] !== undefined) continue;
+        const cur = merged[s.code];
+        merged[s.code] = {
+          sticker_num: s.code,
+          count: defaultCount,
+          history_taps: cur?.history_taps ?? defaultCount,
+          max_dups: Math.max(cur?.max_dups ?? 0, defaultCount),
+          is_favorite: cur?.is_favorite ?? false,
+        };
+      }
+    }
+
+    await importCollection(merged);
+    setImportOpen(false);
   };
 
   // ── Sub-section: Editar Perfil ───────────────────────────────────────────
@@ -251,6 +329,73 @@ export default function ConfigPage() {
           <p>⭐ <strong>Extrastickers</strong> — 21 jugadores especiales con 4 versiones cada uno: Base, Bronce, Plata y Oro.</p>
           <p>🔄 <strong>Cambio</strong> genera un QR o link para compartir, o escaneás el de otra persona para comparar colecciones.</p>
           <p>📊 <strong>Stats</strong> — encontrás tu progreso general.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Sub-section: Novedades ────────────────────────────────────────────────
+  // Static log of the latest changes, ordered newest-first. Keep the entries
+  // short and concrete — this is where users land after dismissing the
+  // floating bell, so the content should mirror what the bell already said.
+  if (section === 'news') {
+    return (
+      <div className="px-4 pt-4 pb-8">
+        <button onClick={() => setSection('main')} className="text-[#00B8D4] text-sm mb-4">
+          ← Volver
+        </button>
+        <h1 className="text-lg font-bold text-zinc-900 dark:text-white mb-1">✨ Novedades</h1>
+        <p className="text-[12.5px] text-zinc-500 dark:text-zinc-400 mb-4">
+          Lo último que sumamos a Fichus2026.
+        </p>
+
+        <div className="space-y-3">
+          <NewsCard
+            date="Mayo 2026"
+            title="Tour guiado por toda la app"
+            items={[
+              'Tutorial nuevo que recorre cada pantalla (Álbum, Cambio, Stats, Favoritas, Config).',
+              'Banner chiquito abajo durante el recorrido — podés ver la app real detrás.',
+              'Volvé a verlo desde "Cómo usar" cuando quieras.',
+            ]}
+          />
+          <NewsCard
+            date="Mayo 2026"
+            title="Comparar listas sin necesidad de cuenta"
+            items={[
+              'El QR de Cambio lleva a una página pública donde tus amigos pegan su lista de texto.',
+              'Detecta automáticamente qué pueden intercambiar.',
+              'Reconoce formato Figuritas y listas en inglés también.',
+            ]}
+          />
+          <NewsCard
+            date="Mayo 2026"
+            title="Menú de 3 puntos en Álbum"
+            items={[
+              'Completar / Vaciar / Eliminar repes desde un solo lugar.',
+              'Ocultar la sección Coca-Cola si no la coleccionás.',
+              'Modo de toque: sumar o restar (útil para bajar stock).',
+              'Cambiar tema y cerrar sesión a mano.',
+            ]}
+          />
+          <NewsCard
+            date="Mayo 2026"
+            title="Más control en Álbum"
+            items={[
+              'Vista por grupos o por países, con orden A-Z / Z-A y 1→20 / 20→1.',
+              'Colapsar cada equipo (no solo el grupo).',
+              'Candado en el header para bloquear toques accidentales.',
+              'Botón compartir → copiar tus faltantes/repes como texto.',
+            ]}
+          />
+          <NewsCard
+            date="Mayo 2026"
+            title="Stats: ranking de menos repetidas"
+            items={[
+              'Las figuritas que tocaste pero (casi) nunca te salieron repe — para saber tus rachas suertudas.',
+              'Tabla "Ver grupos" — referencia rápida de qué país está en cada grupo.',
+            ]}
+          />
         </div>
       </div>
     );
@@ -373,6 +518,7 @@ export default function ConfigPage() {
         {[
           ...(!isGuest ? [{ label: '👤 Editar Perfil', action: () => setSection('profile') }] : []),
           { label: '❓ Cómo usar',          action: () => setSection('howto') },
+          { label: '✨ Novedades',          action: () => setSection('news') },
           { label: '💙 Apoyar el proyecto', action: () => setSection('support') },
         ].map(({ label, action }) => (
           <button
@@ -402,15 +548,28 @@ export default function ConfigPage() {
         </div>
       </div>
 
-      {/* Data */}
+      {/* Data — text is the primary path (easy to paste on mobile). JSON
+          is offered below as a "backup completo" option for users who want
+          full lossless restore including extras / history / favorites. */}
       <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4">
-        <h2 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 mb-3">Importar / Exportar</h2>
-        <div className="flex gap-2">
-          <button onClick={exportData} className="flex-1 py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-medium text-sm">
-            ⬇️ Exportar
+        <h2 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 mb-1">Importar / Exportar</h2>
+        <p className="text-[11.5px] text-zinc-500 dark:text-zinc-400 mb-3 leading-snug">
+          Como texto es más fácil de pasar por WhatsApp o pegar acá. JSON guarda todo (extras, favoritas, stats).
+        </p>
+        <div className="flex gap-2 mb-3">
+          <button onClick={exportAsText} className="flex-1 py-2.5 rounded-xl bg-[#00B8D4] text-white font-semibold text-sm">
+            📋 Exportar texto
           </button>
-          <button onClick={importData} className="flex-1 py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-medium text-sm">
-            ⬆️ Importar
+          <button onClick={importFromText} className="flex-1 py-2.5 rounded-xl bg-[#00B8D4]/10 text-[#00B8D4] font-semibold text-sm">
+            📥 Importar texto
+          </button>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={exportAsJson} className="flex-1 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 font-medium text-[12.5px]">
+            ⬇️ Backup JSON
+          </button>
+          <button onClick={importFromJson} className="flex-1 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 font-medium text-[12.5px]">
+            ⬆️ Restaurar JSON
           </button>
         </div>
       </div>
@@ -489,6 +648,38 @@ export default function ConfigPage() {
           onCancel={() => setConfirm(null)}
         />
       )}
+      {importOpen && (
+        <ImportTextModal
+          onClose={() => setImportOpen(false)}
+          onConfirm={applyTextImport}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Single entry in the Novedades log. Title + bulleted list of changes, all
+ * styled like a card so the section can host many entries while staying
+ * readable. Kept inline here because it's only used in this file.
+ */
+function NewsCard({ date, title, items }: { date: string; title: string; items: string[] }) {
+  return (
+    <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm">
+      <p className="text-[10.5px] uppercase tracking-wider font-bold text-[#00B8D4] mb-1">
+        {date}
+      </p>
+      <h3 className="text-[14.5px] font-bold text-zinc-900 dark:text-white mb-2 leading-tight">
+        {title}
+      </h3>
+      <ul className="space-y-1 text-[12.5px] text-zinc-700 dark:text-zinc-300 leading-snug">
+        {items.map((it, i) => (
+          <li key={i} className="flex gap-2">
+            <span className="text-zinc-400 dark:text-zinc-500 flex-shrink-0">•</span>
+            <span>{it}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

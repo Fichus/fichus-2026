@@ -1,7 +1,6 @@
 'use client';
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { useTheme } from '@/contexts/ThemeContext';
 import {
   useAlbumFilter,
   useAlbumViewMode,
@@ -14,31 +13,8 @@ import {
 import { useCollection } from '@/contexts/CollectionContext';
 import DropdownSelect from '@/components/DropdownSelect';
 import ShareModal from '@/components/ShareModal';
+import HeaderMenu from '@/components/HeaderMenu';
 import type { FilterType } from '@/lib/types';
-
-function MoonIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-    </svg>
-  );
-}
-
-function SunIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="5" />
-      <line x1="12" y1="1" x2="12" y2="3" />
-      <line x1="12" y1="21" x2="12" y2="23" />
-      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-      <line x1="1" y1="12" x2="3" y2="12" />
-      <line x1="21" y1="12" x2="23" y2="12" />
-      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-    </svg>
-  );
-}
 
 const FILTERS: { key: FilterType; label: string }[] = [
   { key: 'all', label: 'Todas' },
@@ -59,7 +35,6 @@ const SORT_OPTIONS: { value: SortMode; label: string }[] = [
 ];
 
 export default function Header() {
-  const { toggleTheme } = useTheme();
   const pathname = usePathname();
   const isAlbum = pathname === '/album';
   const [filter, setFilter] = useAlbumFilter();
@@ -68,6 +43,7 @@ export default function Header() {
   const [search, setSearch] = useAlbumSearch();
   const [locked, setLocked] = useAlbumLocked();
   const [shareOpen, setShareOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const { isSaving, isGuest, saveError } = useCollection();
 
   return (
@@ -140,18 +116,20 @@ export default function Header() {
               </svg>
             </button>
           )}
-          {/*
-            Both theme icons always in the DOM; Tailwind dark: classes pick
-            which one shows. Server and client render identically → zero
-            hydration mismatch.
-          */}
+          {/* Kebab (3-dots) — opens the action menu (theme, hide CC, tap
+              mode, complete/empty album, logout, etc). Replaced the
+              standalone theme toggle to keep the header from feeling
+              crowded once lock + share landed. */}
           <button
-            onClick={toggleTheme}
+            onClick={() => setMenuOpen(true)}
             className="w-9 h-9 rounded-full flex items-center justify-center bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300"
-            aria-label="Cambiar tema"
+            aria-label="Más acciones"
           >
-            <span className="dark:hidden"><MoonIcon /></span>
-            <span className="hidden dark:inline-flex"><SunIcon /></span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="12" cy="5" r="1.7" />
+              <circle cx="12" cy="12" r="1.7" />
+              <circle cx="12" cy="19" r="1.7" />
+            </svg>
           </button>
         </div>
       </div>
@@ -207,6 +185,7 @@ export default function Header() {
         </>
       )}
       {shareOpen && <ShareModal onClose={() => setShareOpen(false)} />}
+      {menuOpen && <HeaderMenu onClose={() => setMenuOpen(false)} />}
     </header>
   );
 }

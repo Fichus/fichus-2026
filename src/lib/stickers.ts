@@ -616,19 +616,21 @@ const VARIANT_LABELS: Record<ExtraVariant, string> = {
 function generateAllStickers(): StickerInfo[] {
   const stickers: StickerInfo[] = [];
 
-  // FWC-00 to FWC-19.
-  // The DB column still stores the historical "FCW-XX" prefix — changing
-  // those would orphan every existing row in production. So the CODE keeps
-  // the "FCW" prefix (used as the unique key everywhere) while the
-  // user-facing LABEL is rewritten to "FWC-XX" to match the official acronym.
+  // FWC-00 to FWC-19. The canonical code now uses the FWC prefix (FIFA
+  // World Cup). The DB used to store FCW-XX as a historical typo — the
+  // migration below renames those rows; new writes use FWC directly.
+  //
+  //   UPDATE collection SET sticker_num = REPLACE(sticker_num, 'FCW-', 'FWC-')
+  //   WHERE sticker_num LIKE 'FCW-%';
+  //
   // role is left empty: the previous "Intro N" / "Historia N" sub-labels
-  // confused users into thinking those numbers were meaningful (vs. the FCW
-  // sticker number itself).
+  // confused users into thinking those numbers were meaningful (vs. the
+  // FWC sticker number itself).
   for (let i = 0; i <= 19; i++) {
-    const code = `FCW-${String(i).padStart(2, '0')}`;
+    const code = `FWC-${String(i).padStart(2, '0')}`;
     stickers.push({
       code,
-      label: code.replace('FCW', 'FWC'),
+      label: code,
       role: '',
       section: 'fcw',
     });
