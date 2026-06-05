@@ -24,6 +24,11 @@ export default function ConfigPage() {
   const [passwordMsg, setPasswordMsg] = useState('');
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
+  // True if the user has an email/password identity. False for users who
+  // signed in via Google OAuth only — they don't have a password to verify,
+  // so the change-password form must let them CREATE one without the
+  // "contraseña actual" check.
+  const [hasPassword, setHasPassword] = useState(true);
   const [confirm, setConfirm] = useState<'clearAll' | 'completeAll' | 'addOneAll' | 'removeOneAll' | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -35,6 +40,12 @@ export default function ConfigPage() {
     supabase.auth.getUser().then(({ data }) => {
       setUserEmail(data.user?.email ?? '');
       setDisplayName(data.user?.user_metadata?.display_name ?? '');
+      // identities[] lists every linked sign-in method. Email/password users
+      // have an 'email' identity; OAuth-only users don't. We use this to
+      // decide whether to show "Crear contraseña" (no current pwd) or
+      // "Cambiar contraseña" (current pwd required).
+      const identities = data.user?.identities ?? [];
+      setHasPassword(identities.some((i) => i.provider === 'email'));
     });
     // Read ?section= from URL
     const params = new URLSearchParams(window.location.search);
@@ -62,7 +73,12 @@ export default function ConfigPage() {
   };
 
   const handleChangePassword = async () => {
-    if (!currentPassword) { setPasswordMsg('Ingresá tu contraseña actual.'); return; }
+    // OAuth users (no password yet) skip the current-pwd verification. They
+    // CREATE a password by calling updateUser directly — the session is
+    // already valid so Supabase accepts the new password without re-auth.
+    if (hasPassword && !currentPassword) {
+      setPasswordMsg('Ingresá tu contraseña actual.'); return;
+    }
     if (!newPassword) return;
     if (newPassword !== confirmPassword) {
       setPasswordMsg('Las contraseñas nuevas no coinciden.');
@@ -74,34 +90,43 @@ export default function ConfigPage() {
     }
     setPasswordSaving(true);
     setPasswordMsg('');
-    // Verify current password
-    const { error: signInErr } = await supabase.auth.signInWithPassword({
-      email: userEmail,
-      password: currentPassword,
-    });
-    if (signInErr) {
-      setPasswordSaving(false);
-      setPasswordMsg('Contraseña actual incorrecta.');
-      setTimeout(() => setPasswordMsg(''), 3000);
-      return;
+    // Verify current password — only when the user already had one. For
+    // OAuth-only users we skip straight to updateUser.
+    if (hasPassword) {
+      const { error: signInErr } = await supabase.auth.signInWithPassword({
+        email: userEmail,
+        password: currentPassword,
+      });
+      if (signInErr) {
+        setPasswordSaving(false);
+        setPasswordMsg('Contraseña actual incorrecta.');
+        setTimeout(() => setPasswordMsg(''), 3000);
+        return;
+      }
     }
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     setPasswordSaving(false);
     if (error) {
       setPasswordMsg('Error: ' + error.message);
     } else {
-      setPasswordMsg('¡Contraseña actualizada!');
+      setPasswordMsg(hasPassword ? '¡Contraseña actualizada!' : '¡Contraseña creada! Ya podés usar email + contraseña además de Google.');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
+      setHasPassword(true); // they now have one
     }
-    setTimeout(() => setPasswordMsg(''), 3000);
+    setTimeout(() => setPasswordMsg(''), 4000);
   };
 
   const handleForgotPassword = async () => {
     if (!userEmail) return;
+    // Route the recovery link through /auth/callback so the code is
+    // exchanged for a session BEFORE landing on /reset-password. Without
+    // the callback hop, the page would receive a `code` param it can't use
+    // and we'd lose the recovery session.
+    const base = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
     await supabase.auth.resetPasswordForEmail(userEmail, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${base}/auth/callback?next=/reset-password`,
     });
     setForgotSent(true);
     setTimeout(() => setForgotSent(false), 5000);
@@ -251,50 +276,64 @@ export default function ConfigPage() {
           )}
         </div>
 
-        {/* Change password */}
+        {/* Change / create password — adapts to whether the user already has
+            an email/password identity. OAuth-only users (signed in with
+            Google) see "Crear contraseña" with no "actual" field; once they
+            create one, the form switches to the standard "Cambiar". */}
         <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4">
-          <h2 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 mb-3">Cambiar contraseña</h2>
+          <h2 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 mb-1">
+            {hasPassword ? 'Cambiar contraseña' : 'Crear contraseña'}
+          </h2>
+          {!hasPassword && (
+            <p className="text-[12px] text-zinc-500 dark:text-zinc-400 mb-3 leading-snug">
+              Te registraste con Google. Si querés también poder iniciar con email y contraseña, creala acá.
+            </p>
+          )}
           <div className="flex flex-col gap-2">
-            <input
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              placeholder="Contraseña actual"
-              className="w-full rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm px-3 py-2 outline-none focus:ring-2 focus:ring-[#00B8D4]/50"
-            />
+            {hasPassword && (
+              <input
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="Contraseña actual"
+                className="w-full rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm px-3 py-2 outline-none focus:ring-2 focus:ring-[#00B8D4]/50"
+              />
+            )}
             <input
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Nueva contraseña"
+              placeholder={hasPassword ? 'Nueva contraseña' : 'Contraseña'}
               className="w-full rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm px-3 py-2 outline-none focus:ring-2 focus:ring-[#00B8D4]/50"
             />
             <input
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Confirmar nueva contraseña"
+              placeholder={hasPassword ? 'Confirmar nueva contraseña' : 'Repetir contraseña'}
               className="w-full rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm px-3 py-2 outline-none focus:ring-2 focus:ring-[#00B8D4]/50"
             />
             <button
               onClick={handleChangePassword}
-              disabled={passwordSaving || !newPassword || !currentPassword}
+              disabled={passwordSaving || !newPassword || (hasPassword && !currentPassword)}
               className="py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-medium text-sm disabled:opacity-40"
             >
-              {passwordSaving ? 'Guardando…' : 'Actualizar contraseña'}
+              {passwordSaving ? 'Guardando…' : (hasPassword ? 'Actualizar contraseña' : 'Crear contraseña')}
             </button>
             {passwordMsg && (
               <p className={`text-xs ${pwMsgIsError ? 'text-red-500' : 'text-[#00B8D4]'}`}>
                 {passwordMsg}
               </p>
             )}
-            <button
-              onClick={handleForgotPassword}
-              disabled={forgotSent}
-              className="text-xs text-zinc-400 hover:text-[#00B8D4] text-left transition-colors disabled:opacity-60 pt-1"
-            >
-              {forgotSent ? '✓ Mail de recuperación enviado' : '¿Olvidaste tu contraseña? Enviar mail de recuperación'}
-            </button>
+            {hasPassword && (
+              <button
+                onClick={handleForgotPassword}
+                disabled={forgotSent}
+                className="text-xs text-zinc-400 hover:text-[#00B8D4] text-left transition-colors disabled:opacity-60 pt-1"
+              >
+                {forgotSent ? '✓ Mail de recuperación enviado' : '¿Olvidaste tu contraseña? Enviar mail de recuperación'}
+              </button>
+            )}
           </div>
         </div>
       </div>

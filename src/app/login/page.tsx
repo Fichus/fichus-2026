@@ -9,8 +9,30 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [forgotMsg, setForgotMsg] = useState('');
+  const [forgotSending, setForgotSending] = useState(false);
   const router = useRouter();
   const supabase = createClient();
+
+  const handleForgot = async () => {
+    setError('');
+    setForgotMsg('');
+    if (!email || !email.includes('@')) {
+      setForgotMsg('Ingresá tu email arriba y volvé a tocar.');
+      return;
+    }
+    setForgotSending(true);
+    const base = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${base}/auth/callback?next=/reset-password`,
+    });
+    setForgotSending(false);
+    if (error) {
+      setForgotMsg('Error: ' + error.message);
+    } else {
+      setForgotMsg('Te mandamos un mail con un link para restablecer la contraseña.');
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,6 +103,21 @@ export default function LoginPage() {
             {loading ? 'Entrando…' : 'Entrar'}
           </button>
         </form>
+
+        {/* Forgot-password link — uses the email already typed above. The
+            Supabase send doesn't reveal whether the email exists, so we
+            always show a generic success message after a successful send. */}
+        <button
+          type="button"
+          onClick={handleForgot}
+          disabled={forgotSending}
+          className="w-full mt-3 text-xs text-zinc-500 hover:text-[#00B8D4] text-center transition-colors disabled:opacity-60"
+        >
+          {forgotSending ? 'Enviando…' : '¿Olvidaste tu contraseña?'}
+        </button>
+        {forgotMsg && (
+          <p className="mt-2 text-[12px] text-center text-[#00B8D4]">{forgotMsg}</p>
+        )}
 
         <div className="flex items-center gap-3 my-4">
           <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700" />
