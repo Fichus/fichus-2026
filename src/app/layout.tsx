@@ -9,10 +9,10 @@ import { Analytics } from '@vercel/analytics/next';
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist-sans' });
 
 export const metadata: Metadata = {
-  title: 'Fichus2026 - Mundial de Figuritas',
+  title: 'MisFichus - Mundial de Figuritas',
   description: 'Segui tu coleccion de figuritas del Mundial 2026',
   manifest: '/manifest.json',
-  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'Fichus2026' },
+  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'MisFichus' },
   icons: { icon: '/icon.svg', apple: '/icon.svg' },
 };
 
@@ -34,7 +34,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5753007351043490"
          crossOrigin="anonymous"></script>
          <meta property="og:image" content="https://misfichus.com/logo.png" />
-         <meta property="og:title" content="Fichus2026 - Álbum de Figuritas" />
+         <meta property="og:title" content="MisFichus - Álbum de Figuritas" />
          <meta property="og:description" content="Rastreá tus figuritas del Mundial 2026" />
       </head>
       <body className={`${geist.variable} bg-zinc-300 dark:bg-zinc-800`}>

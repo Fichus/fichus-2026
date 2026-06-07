@@ -157,38 +157,50 @@ export default function PublicCambioClient({
     setConfirming(true);
     try {
       const supabase = createClient();
+      const receiveCodes = Array.from(selectedReceive);
+      const giveCodes    = Array.from(selectedGive);
 
-      const codesToUpdate = [
-        ...Array.from(selectedReceive).map((code) => ({ code, delta: +1 })),
-        ...Array.from(selectedGive).map((code) => ({ code, delta: -1 })),
-      ];
-
-      // Fetch current entries for the stickers we need to update
-      const { data: currentEntries } = await supabase
-        .from('collection')
-        .select('sticker_num,count,history_taps,max_dups,is_favorite')
-        .eq('user_id', viewerUserId)
-        .in('sticker_num', codesToUpdate.map((x) => x.code));
-
-      const entryMap: Record<string, CollectionEntry> = {};
-      for (const e of (currentEntries ?? []) as CollectionEntry[]) {
-        entryMap[e.sticker_num] = e;
-      }
-
-      const updates = codesToUpdate.map(({ code, delta }) => {
-        const cur = entryMap[code];
-        const newCount = Math.max(0, (cur?.count ?? 0) + delta);
-        return {
-          user_id: viewerUserId,
-          sticker_num: code,
-          count: newCount,
-          history_taps: cur?.history_taps ?? 0,
-          max_dups: Math.max(cur?.max_dups ?? 0, newCount),
-          is_favorite: cur?.is_favorite ?? false,
-        };
+      // Preferred path: `apply_trade` RPC (SECURITY DEFINER) atomically moves
+      // counts on BOTH sides — viewer ±1 AND target ∓1 — so the other person's
+      // repe stock drops when we take from them. Falls back to the old
+      // viewer-only update if the RPC isn't installed yet (returns 42883 / PGRST202).
+      const { error: rpcError } = await supabase.rpc('apply_trade', {
+        p_target_user_id: targetUserId,
+        p_codes_received: receiveCodes,
+        p_codes_given:    giveCodes,
       });
 
-      await supabase.from('collection').upsert(updates, { onConflict: 'user_id,sticker_num' });
+      if (rpcError && (rpcError.code === '42883' || rpcError.code === 'PGRST202')) {
+        // Fallback: legacy one-sided update of viewer only.
+        const codesToUpdate = [
+          ...receiveCodes.map((code) => ({ code, delta: +1 })),
+          ...giveCodes.map((code) => ({ code, delta: -1 })),
+        ];
+        const { data: currentEntries } = await supabase
+          .from('collection')
+          .select('sticker_num,count,history_taps,max_dups,is_favorite')
+          .eq('user_id', viewerUserId)
+          .in('sticker_num', codesToUpdate.map((x) => x.code));
+        const entryMap: Record<string, CollectionEntry> = {};
+        for (const e of (currentEntries ?? []) as CollectionEntry[]) {
+          entryMap[e.sticker_num] = e;
+        }
+        const updates = codesToUpdate.map(({ code, delta }) => {
+          const cur = entryMap[code];
+          const newCount = Math.max(0, (cur?.count ?? 0) + delta);
+          return {
+            user_id: viewerUserId,
+            sticker_num: code,
+            count: newCount,
+            history_taps: cur?.history_taps ?? 0,
+            max_dups: Math.max(cur?.max_dups ?? 0, newCount),
+            is_favorite: cur?.is_favorite ?? false,
+          };
+        });
+        await supabase.from('collection').upsert(updates, { onConflict: 'user_id,sticker_num' });
+      } else if (rpcError) {
+        console.error('[apply_trade]', rpcError.code, rpcError.message);
+      }
 
       setSelectedReceive(new Set());
       setSelectedGive(new Set());
@@ -209,8 +221,9 @@ export default function PublicCambioClient({
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <Link href="/album">
-            <h1 className="text-2xl font-black text-zinc-900 dark:text-white">
-              Fichus<span className="text-[#00B8D4]">2026</span>
+            <h1 className="text-2xl font-black tracking-tight">
+              <span className="text-[#00B8D4]">Mis</span>
+              <span className="text-zinc-900 dark:text-white">Fichus</span>
             </h1>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">Página de cambio</p>
           </Link>
@@ -239,6 +252,70 @@ export default function PublicCambioClient({
             <div className="h-full bg-[#00B8D4] rounded-full" style={{ width: `${pct}%` }} />
           </div>
           <p className="text-xs text-zinc-400 mt-1">{targetOwned} / {targetTotal} figuritas</p>
+        </div>
+
+        {/* Paste-list match — moved to the top of the page (used to sit at the
+            bottom). When someone arrives via QR the most common first step is
+            to drop their text list from another app to see what's tradeable,
+            so it deserves the prime real estate just under the target stats.
+            Works for anyone, logged in or not. */}
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4">
+          <h2 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 mb-1">
+            📋 Pegá tu lista para comparar
+          </h2>
+          <p className="text-xs text-zinc-400 mb-3 leading-snug">
+            ¿Tenés tu lista en texto (de otra app o de un chat)? Pegala y te digo qué pueden intercambiar con {displayName} — sin necesidad de cuenta.
+          </p>
+          <div className="flex gap-2 mb-2">
+            <button
+              onClick={handlePasteFromClipboard}
+              className="flex-1 py-2 rounded-xl bg-[#00B8D4] text-white text-[13px] font-semibold active:scale-[0.99] transition-transform"
+            >
+              📋 Pegar del portapapeles
+            </button>
+            {pastedText && (
+              <button
+                onClick={() => setPastedText('')}
+                className="px-3 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-[13px] font-semibold"
+              >
+                Limpiar
+              </button>
+            )}
+          </div>
+          <textarea
+            value={pastedText}
+            onChange={(e) => setPastedText(e.target.value)}
+            placeholder={'Ejemplo:\n\nMe faltan\nMEX 🇲🇽: 1, 5, 12\nARG 🇦🇷: 3, 7\n\nRepetidas\nBRA 🇧🇷: 2, 9'}
+            rows={5}
+            className="w-full rounded-xl bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white text-[12px] font-mono px-3 py-2 outline-none focus:ring-2 focus:ring-[#00B8D4]/40 resize-none"
+          />
+
+          {pastedMatches && !pastedMatches.empty && (
+            <div className="mt-3 space-y-3">
+              <PasteResultBlock
+                title={`🎁 ${displayName} te puede dar`}
+                subtitle="Tiene repetidas y vos las necesitás"
+                codes={pastedMatches.ownerCanGive}
+                color="text-[#00B8D4]"
+                bg="bg-[#00B8D4]/10"
+                empty={`${displayName} no tiene repes de lo que necesitás.`}
+              />
+              <PasteResultBlock
+                title={`🤝 Le podés dar a ${displayName}`}
+                subtitle="Tenés repetidas y no las tiene"
+                codes={pastedMatches.otherCanGive}
+                color="text-violet-500"
+                bg="bg-violet-100 dark:bg-violet-900/20"
+                empty={`No tenés repes que ${displayName} necesite.`}
+              />
+            </div>
+          )}
+
+          {pastedMatches && pastedMatches.empty && (
+            <p className="mt-3 text-[12px] text-amber-600 dark:text-amber-400 text-center">
+              No detecté líneas válidas en el texto. Asegurate de que tenga secciones &ldquo;Me faltan&rdquo; o &ldquo;Repetidas&rdquo; con códigos tipo MEX: 1, 2, 3.
+            </p>
+          )}
         </div>
 
         {isViewer ? (
@@ -407,69 +484,6 @@ export default function PublicCambioClient({
           </div>
         )}
 
-        {/* Paste-list match — works for anyone, logged in or not. Especially
-            useful for viewers who don't have a Fichus account but DO have a
-            text export from another app (Figuritas, Panini, etc.). Drops the
-            need to chat through WhatsApp to know what's tradeable. */}
-        <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-sm mb-4">
-          <h2 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 mb-1">
-            📋 Pegá tu lista para comparar
-          </h2>
-          <p className="text-xs text-zinc-400 mb-3 leading-snug">
-            ¿Tenés tu lista en texto (de otra app o de un chat)? Pegala y te digo qué pueden intercambiar con {displayName} — sin necesidad de cuenta.
-          </p>
-          <div className="flex gap-2 mb-2">
-            <button
-              onClick={handlePasteFromClipboard}
-              className="flex-1 py-2 rounded-xl bg-[#00B8D4] text-white text-[13px] font-semibold active:scale-[0.99] transition-transform"
-            >
-              📋 Pegar del portapapeles
-            </button>
-            {pastedText && (
-              <button
-                onClick={() => setPastedText('')}
-                className="px-3 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-[13px] font-semibold"
-              >
-                Limpiar
-              </button>
-            )}
-          </div>
-          <textarea
-            value={pastedText}
-            onChange={(e) => setPastedText(e.target.value)}
-            placeholder={'Ejemplo:\n\nMe faltan\nMEX 🇲🇽: 1, 5, 12\nARG 🇦🇷: 3, 7\n\nRepetidas\nBRA 🇧🇷: 2, 9'}
-            rows={5}
-            className="w-full rounded-xl bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white text-[12px] font-mono px-3 py-2 outline-none focus:ring-2 focus:ring-[#00B8D4]/40 resize-none"
-          />
-
-          {pastedMatches && !pastedMatches.empty && (
-            <div className="mt-3 space-y-3">
-              <PasteResultBlock
-                title={`🎁 ${displayName} te puede dar`}
-                subtitle="Tiene repetidas y vos las necesitás"
-                codes={pastedMatches.ownerCanGive}
-                color="text-[#00B8D4]"
-                bg="bg-[#00B8D4]/10"
-                empty={`${displayName} no tiene repes de lo que necesitás.`}
-              />
-              <PasteResultBlock
-                title={`🤝 Le podés dar a ${displayName}`}
-                subtitle="Tenés repetidas y no las tiene"
-                codes={pastedMatches.otherCanGive}
-                color="text-violet-500"
-                bg="bg-violet-100 dark:bg-violet-900/20"
-                empty={`No tenés repes que ${displayName} necesite.`}
-              />
-            </div>
-          )}
-
-          {pastedMatches && pastedMatches.empty && (
-            <p className="mt-3 text-[12px] text-amber-600 dark:text-amber-400 text-center">
-              No detecté líneas válidas en el texto. Asegurate de que tenga secciones &ldquo;Me faltan&rdquo; o &ldquo;Repetidas&rdquo; con códigos tipo MEX: 1, 2, 3.
-            </p>
-          )}
-        </div>
-
         {/* Footer CTA */}
         <div className="mt-6 pb-8 flex flex-col items-center gap-3">
           <Link
@@ -479,7 +493,7 @@ export default function PublicCambioClient({
             Abrir mi álbum →
           </Link>
           <p className="text-xs text-zinc-400 dark:text-zinc-600">
-            Fichus2026 — Tu colección del Mundial 2026
+            MisFichus — Tu colección del Mundial 2026
           </p>
         </div>
 

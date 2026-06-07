@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import {
   useAlbumFilter,
@@ -7,6 +7,7 @@ import {
   useAlbumSortMode,
   useAlbumSearch,
   useAlbumLocked,
+  hydrateAlbumShowCC,
   type ViewMode,
   type SortMode,
 } from '@/lib/albumStore';
@@ -14,6 +15,7 @@ import { useCollection } from '@/contexts/CollectionContext';
 import DropdownSelect from '@/components/DropdownSelect';
 import ShareModal from '@/components/ShareModal';
 import HeaderMenu from '@/components/HeaderMenu';
+import HistoryButton from '@/components/HistoryButton';
 import type { FilterType } from '@/lib/types';
 
 const FILTERS: { key: FilterType; label: string }[] = [
@@ -46,6 +48,11 @@ export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { isSaving, isGuest, saveError } = useCollection();
 
+  // Apply persisted "Ocultar Coca-Cola" preference once on mount. Default
+  // (true) is rendered on the server so the first client paint matches; this
+  // effect flips the store to `false` if the user previously hid CC.
+  useEffect(() => { hydrateAlbumShowCC(); }, []);
+
   return (
     <header className="sticky top-0 z-50 bg-white/95 dark:bg-zinc-950/95 backdrop-blur border-b border-zinc-200 dark:border-zinc-800">
       {/* DB error banner — only when a write fails. */}
@@ -58,11 +65,9 @@ export default function Header() {
       {/* Row 1: Brand + theme toggle */}
       <div className="flex items-center justify-between px-4 h-12">
         <div className="flex items-center gap-1.5">
-          <div className="font-bold text-base text-zinc-900 dark:text-white tracking-tight">
-            Fichus<span className="text-[#00B8D4]">2026</span>
-          </div>
-          <div className="text-[9px] font-bold bg-[#00B8D4] text-white px-1.5 py-0.5 rounded-sm leading-none">
-            BETA
+          <div className="font-bold text-base tracking-tight">
+            <span className="text-[#00B8D4]">Mis</span>
+            <span className="text-zinc-900 dark:text-white">Fichus</span>
           </div>
           {!isGuest && isSaving && (
             <div className="flex items-center gap-1 text-[10px] font-medium text-zinc-400 dark:text-zinc-500">
@@ -75,6 +80,7 @@ export default function Header() {
             Lock is album-only; share is album-only (uses the collection).
             Theme is always available. */}
         <div className="flex items-center gap-1.5">
+          {isAlbum && <HistoryButton />}
           {isAlbum && (
             <button
               onClick={() => setLocked(!locked)}

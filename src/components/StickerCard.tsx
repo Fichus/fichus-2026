@@ -64,6 +64,12 @@ function StickerCard({ sticker }: Props) {
 
   const isOwned   = count > 0;
   const isExtra   = sticker.section === 'extra';
+  // Team shields (the "-1" sticker of each country) get a distinct gold tone
+  // so the eye can pick them out at a glance from the surrounding squad. We
+  // detect by role prefix instead of sticker code so it stays correct if the
+  // numbering ever changes. FWC/CC stickers don't use "Escudo" as their role
+  // so they keep the regular cyan styling.
+  const isShield  = !isExtra && sticker.section === 'team' && sticker.role?.startsWith('Escudo');
   const variant   = sticker.extraVariant ?? 'BASE';
   const extraStyle = EXTRA_STYLES[variant];
 
@@ -71,6 +77,11 @@ function StickerCard({ sticker }: Props) {
   let bgClass: string;
   if (isExtra) {
     bgClass = isOwned ? extraStyle.bg : extraStyle.emptyBg;
+  } else if (isShield) {
+    // Owned shield = saturated gold; missing shield = pale gold tint so it's
+    // still readable as "different from a regular missing card" even when
+    // empty. Keeps the missing/repe state visually clear.
+    bgClass = isOwned ? 'bg-amber-400 dark:bg-amber-500' : 'bg-amber-100 dark:bg-amber-900/40';
   } else if (isOwned) {
     bgClass = 'bg-[#00B8D4]';
   } else {
@@ -83,6 +94,9 @@ function StickerCard({ sticker }: Props) {
   if (isExtra) {
     textMain = isOwned ? extraStyle.text : extraStyle.emptyText;
     textSub  = isOwned ? extraStyle.sub  : extraStyle.emptySub;
+  } else if (isShield) {
+    textMain = isOwned ? 'text-amber-950 dark:text-amber-50' : 'text-amber-700 dark:text-amber-300';
+    textSub  = isOwned ? 'text-amber-900/80 dark:text-amber-50/80' : 'text-amber-600/80 dark:text-amber-400/70';
   } else if (isOwned) {
     textMain = 'text-white';
     textSub  = 'text-white/75';
@@ -100,6 +114,10 @@ function StickerCard({ sticker }: Props) {
     btnBg        = btnStr.split(' ').slice(0, 2).join(' ');
     btnText      = btnStr.split(' ').slice(2).join(' ');
     dividerColor = 'text-current opacity-25';
+  } else if (isShield) {
+    btnBg        = isOwned ? 'bg-amber-900/15 dark:bg-amber-950/25' : 'bg-amber-200/70 dark:bg-amber-800/30';
+    btnText      = isOwned ? 'text-amber-950 dark:text-amber-50' : 'text-amber-700 dark:text-amber-300';
+    dividerColor = isOwned ? 'text-amber-900/30 dark:text-amber-100/30' : 'text-amber-500/40';
   } else if (isOwned) {
     btnBg        = 'bg-white/20';
     btnText      = 'text-white';

@@ -12,6 +12,7 @@ import React, {
 import { createClient } from '@/lib/supabase/client';
 import type { CollectionEntry } from '@/lib/types';
 import { ALL_STICKERS, getTeamStickers } from '@/lib/stickers';
+import { pushHistoryEntry, removeHistoryEntry, type HistoryEntry } from '@/lib/historyStore';
 
 const GUEST_KEY = 'guest_collection';
 
@@ -101,6 +102,7 @@ interface CollectionContextType {
   importCollection: (data: Record<string, CollectionEntry>) => Promise<void>;
   getCount: (code: string) => number;
   isFavorite: (code: string) => boolean;
+  undoHistoryEntry: (entry: HistoryEntry) => void;
 }
 
 const CollectionContext = createContext<CollectionContextType | null>(null);
@@ -358,10 +360,20 @@ export function CollectionProvider({
   // sequential dispatches always accumulate correctly — the reducer always
   // receives the latest state, never a stale closure value.
 
+  // Snapshot the pre-action entry so undoHistoryEntry can restore exactly
+  // what was there — important for max_dups/history_taps too, not just count.
+  // We deep-copy so later in-place mutations don't poison the snapshot.
+  const snapshotOf = (code: string): CollectionEntry | null => {
+    const cur = collectionRef.current[code];
+    return cur ? { ...cur } : null;
+  };
+
   const addSticker = useCallback(
     (code: string) => {
+      const before = snapshotOf(code);
       dispatch({ type: 'INCREMENT', payload: code });
       scheduleSync(code);
+      pushHistoryEntry({ code, label: `+1 ${code}`, before });
     },
     [scheduleSync]
   );
@@ -370,16 +382,22 @@ export function CollectionProvider({
     (code: string) => {
       // Let the reducer handle the count > 0 guard — avoids stale-closure
       // issues when + and − are tapped rapidly before a re-render.
+      const before = snapshotOf(code);
+      if ((before?.count ?? 0) <= 0) return; // nothing to log — reducer no-ops
       dispatch({ type: 'DECREMENT', payload: code });
       scheduleSync(code);
+      pushHistoryEntry({ code, label: `-1 ${code}`, before });
     },
     [scheduleSync]
   );
 
   const toggleFavorite = useCallback(
     (code: string) => {
+      const before = snapshotOf(code);
       dispatch({ type: 'TOGGLE_FAVORITE', payload: code });
       scheduleSync(code);
+      const wasFav = before?.is_favorite ?? false;
+      pushHistoryEntry({ code, label: `${wasFav ? '♡' : '♥'} ${code}`, before });
     },
     [scheduleSync]
   );
@@ -607,6 +625,29 @@ export function CollectionProvider({
     [cancelAllPending, bulkSave, userId, supabase, isGuest]
   );
 
+  // ── Undo a history entry ──────────────────────────────────────────────────
+  // Restores the captured "before" snapshot. If the snapshot is null (the
+  // sticker had no DB row at the time), we restore a fresh zero entry — the
+  // upsert path doesn't support a true DELETE without extra plumbing, and a
+  // count-0 row is functionally equivalent for everything in the UI.
+  const undoHistoryEntry = useCallback(
+    (entry: HistoryEntry) => {
+      const restored: CollectionEntry = entry.before
+        ? { ...entry.before }
+        : {
+            sticker_num: entry.code,
+            count: 0,
+            history_taps: 0,
+            max_dups: 0,
+            is_favorite: false,
+          };
+      dispatch({ type: 'SET', payload: restored });
+      scheduleSync(entry.code);
+      removeHistoryEntry(entry.id);
+    },
+    [scheduleSync]
+  );
+
   const getCount = useCallback((code: string) => collection[code]?.count ?? 0, [collection]);
   const isFavorite = useCallback(
     (code: string) => collection[code]?.is_favorite ?? false,
@@ -637,6 +678,7 @@ export function CollectionProvider({
         importCollection,
         getCount,
         isFavorite,
+        undoHistoryEntry,
       }}
     >
       {children}

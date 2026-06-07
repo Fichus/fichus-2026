@@ -106,8 +106,26 @@ export function useAlbumLocked(): [boolean, (v: boolean) => void] {
 // Toggle from the kebab menu. When false, the CC group is hidden everywhere
 // (album rendering + right-side sidebar). Stickers in the DB are NOT touched —
 // flipping this back to true reveals the existing counts as they were.
+//
+// Persisted to localStorage so the choice survives reloads and new sessions.
+// The store always defaults to `true` for SSR so server-rendered output matches
+// the first client paint; `hydrateAlbumShowCC()` is called once on mount from
+// Header to apply the stored preference (a tiny CC flash on first paint is the
+// trade-off for keeping SSR/CSR markup in sync).
+const SHOW_CC_KEY = 'fichus:showCC';
 const showCCStore = makeStore<boolean>(true);
-export function setAlbumShowCC(v: boolean) { showCCStore.set(v); }
+export function setAlbumShowCC(v: boolean) {
+  showCCStore.set(v);
+  try { if (typeof window !== 'undefined') localStorage.setItem(SHOW_CC_KEY, v ? '1' : '0'); } catch {}
+}
+export function hydrateAlbumShowCC() {
+  try {
+    if (typeof window === 'undefined') return;
+    const raw = localStorage.getItem(SHOW_CC_KEY);
+    if (raw === '0') showCCStore.set(false);
+    else if (raw === '1') showCCStore.set(true);
+  } catch {}
+}
 export function useAlbumShowCC(): [boolean, (v: boolean) => void] {
   return [useSyncExternalStore(showCCStore.subscribe, showCCStore.get, showCCStore.get), setAlbumShowCC];
 }
