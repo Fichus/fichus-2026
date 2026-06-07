@@ -2,7 +2,7 @@
 import React, { useMemo } from 'react';
 import { useCollection } from '@/contexts/CollectionContext';
 import StickerCard from '@/components/StickerCard';
-import { GROUPS, STICKER_MAP } from '@/lib/stickers';
+import { GROUPS, ALL_STICKERS } from '@/lib/stickers';
 import type { StickerInfo } from '@/lib/types';
 
 const GROUP_KEYS = Object.keys(GROUPS);
@@ -16,11 +16,13 @@ interface FavGroup {
 export default function FavoritasPage() {
   const { collection } = useCollection();
 
+  // Walk ALL_STICKERS in canonical album order and pick the favorited ones.
+  // Previously we mapped from `Object.values(collection)`, which yields
+  // insertion order — i.e. the order the user TAPPED the heart — so favs
+  // appeared chronologically instead of by sticker number. This fixes that:
+  // a country's favs now show 1, 2, 3… and groups appear in album order too.
   const favorites = useMemo(() => {
-    return Object.values(collection)
-      .filter((e) => e.is_favorite)
-      .map((e) => STICKER_MAP.get(e.sticker_num))
-      .filter((s): s is StickerInfo => s !== undefined);
+    return ALL_STICKERS.filter((s) => collection[s.code]?.is_favorite);
   }, [collection]);
 
   const grouped = useMemo<FavGroup[]>(() => {
