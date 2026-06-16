@@ -4,7 +4,7 @@
  * Format compatible with the Figuritas app text export so users can paste
  * lists between apps:
  *
- *   Fichus2026 - Lista
+ *   MisFichus - Lista
  *
  *   Me faltan
  *   FWC 🏆: 0, 4, 7
@@ -95,7 +95,7 @@ export function buildShareText(
   mode: ShareMode,
   collection: Record<string, CollectionEntry>,
 ): string {
-  const lines: string[] = ['Fichus2026 - Lista', ''];
+  const lines: string[] = ['MisFichus - Lista', ''];
 
   const buildSection = (label: 'Me faltan' | 'Repetidas') => {
     const sectionLines: string[] = [];
@@ -136,7 +136,7 @@ export function buildShareText(
   if (mode === 'missing' || mode === 'both') buildSection('Me faltan');
   if (mode === 'repeated' || mode === 'both') buildSection('Repetidas');
 
-  lines.push('Generado con Fichus2026');
+  lines.push('Generado con MisFichus');
   lines.push('https://misfichus.com');
 
   return lines.join('\n');
