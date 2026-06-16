@@ -2,10 +2,12 @@
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { QRCodeSVG } from 'qrcode.react';
 import { STICKER_MAP, ALL_STICKERS } from '@/lib/stickers';
 import { useTheme } from '@/contexts/ThemeContext';
 import { createClient } from '@/lib/supabase/client';
 import { parseShareText } from '@/lib/shareText';
+import { encodeTradePayload } from '@/lib/tradePayload';
 import type { CollectionEntry } from '@/lib/types';
 
 function MoonIcon() {
@@ -117,12 +119,28 @@ export default function PublicCambioClient({
     if (!text) return null;
     const parsed = parseShareText(text);
     if (parsed.missing.length === 0 && parsed.repeated.length === 0) {
-      return { ownerCanGive: [], otherCanGive: [], empty: true };
+      return { ownerCanGive: [], otherCanGive: [], empty: true, parsed };
     }
     const ownerCanGive = parsed.missing.filter((code) => (targetCollection[code] ?? 0) > 1);
     const otherCanGive = parsed.repeated.filter((code) => (targetCollection[code] ?? 0) === 0);
-    return { ownerCanGive, otherCanGive, empty: false };
+    return { ownerCanGive, otherCanGive, empty: false, parsed };
   }, [pastedText, targetCollection]);
+
+  // Hand-off QR: encodes the parsed lists into a URL the album owner can scan
+  // with their own phone. They land on /cambio/match where their session reads
+  // the codes, intersects with their own collection, lets them select per
+  // sticker, and confirms — atomically updating their stock. This is the only
+  // way to pull off a "mark in MY stock" step from a stranger's session,
+  // because the public page doesn't have write access to the owner's rows.
+  const matchUrl = useMemo(() => {
+    if (!pastedMatches || pastedMatches.empty) return '';
+    if (typeof window === 'undefined') return '';
+    const payload = encodeTradePayload({
+      missing:  pastedMatches.parsed.missing,
+      repeated: pastedMatches.parsed.repeated,
+    });
+    return `${window.location.origin}/cambio/match?d=${payload}`;
+  }, [pastedMatches]);
 
   const handlePasteFromClipboard = async () => {
     try {
@@ -308,6 +326,26 @@ export default function PublicCambioClient({
                 bg="bg-violet-100 dark:bg-violet-900/20"
                 empty={`No tenés repes que ${displayName} necesite.`}
               />
+
+              {/* QR hand-off — only meaningful when there's at least one
+                  potential trade. We show it inside an amber card so it reads
+                  as an instruction to the owner (not a duplicate of the QR
+                  at the top of the page, which is the owner's identity QR). */}
+              {matchUrl && (pastedMatches.ownerCanGive.length > 0 || pastedMatches.otherCanGive.length > 0) && (
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200/60 dark:border-amber-700/40 rounded-xl p-3">
+                  <h3 className="font-bold text-[13px] text-amber-800 dark:text-amber-300 mb-1">
+                    📱 Pasale este QR al dueño del álbum
+                  </h3>
+                  <p className="text-[11.5px] text-amber-700/90 dark:text-amber-300/80 leading-snug mb-2">
+                    {displayName} lo escanea con su celu y desde su cuenta puede marcar las que se cambian — se le actualiza el stock.
+                  </p>
+                  <div className="flex justify-center">
+                    <div className="p-2 bg-white rounded-xl shadow-sm">
+                      <QRCodeSVG value={matchUrl} size={160} level="M" />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

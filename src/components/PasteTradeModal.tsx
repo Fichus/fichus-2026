@@ -12,23 +12,31 @@ interface Props {
 
 /**
  * Lets the user paste another person's faltantes/repetidas (in the same
- * Figuritas-compatible text format we export) and see two cross-referenced
- * lists:
+ * Figuritas-compatible text format we export) and surfaces two cross-
+ * referenced lists:
  *
  *   - "Le puedo dar"  → stickers THEY are missing AND I have repeated.
  *   - "Me puede dar"  → stickers I am missing AND THEY have repeated.
  *
- * Read-only suggestion engine — does not modify either collection. The user
- * still has to negotiate the actual swap. The match logic compares against
- * `collection[code].count`: > 1 means I have a spare, === 0 means I lack it.
+ * Both lists are tappable. Selecting a code marks it for the trade; the
+ * confirm button at the bottom applies the deltas to MY collection
+ * (give = removeSticker, receive = addSticker). Each tap goes through the
+ * regular collection actions so the moves land in the undo history.
+ *
+ * Read-only filter logic — the OTHER person's collection is never touched
+ * here, since we don't know who they are. (The QR-scan flow handles that
+ * via `apply_trade` on the public cambio page.)
  *
  * Rendered via portal so the sticky header / backdrop-blur ancestors don't
  * trap its `position: fixed`.
  */
 export default function PasteTradeModal({ onClose }: Props) {
-  const { collection } = useCollection();
+  const { collection, addSticker, removeSticker } = useCollection();
   const [text, setText] = useState('');
   const [mounted, setMounted] = useState(false);
+  const [selectedGive, setSelectedGive] = useState<Set<string>>(new Set());
+  const [selectedReceive, setSelectedReceive] = useState<Set<string>>(new Set());
+  const [done, setDone] = useState(false);
   useEffect(() => setMounted(true), []);
   useAvoidTutorial(onClose);
 
@@ -46,6 +54,42 @@ export default function PasteTradeModal({ onClose }: Props) {
     return { iCanGive, theyCanGive };
   }, [parsed, collection]);
 
+  // If the underlying collection changes mid-flow (e.g. I tap a sticker on the
+  // album behind the modal) prune selections that no longer make sense, so we
+  // don't end up "confirming" a trade against stale state.
+  useEffect(() => {
+    setSelectedGive((prev) => {
+      const next = new Set<string>();
+      for (const c of prev) if (matches.iCanGive.includes(c)) next.add(c);
+      return next.size === prev.size ? prev : next;
+    });
+    setSelectedReceive((prev) => {
+      const next = new Set<string>();
+      for (const c of prev) if (matches.theyCanGive.includes(c)) next.add(c);
+      return next.size === prev.size ? prev : next;
+    });
+  }, [matches]);
+
+  const toggleGive = (code: string) => {
+    setDone(false);
+    setSelectedGive((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  };
+
+  const toggleReceive = (code: string) => {
+    setDone(false);
+    setSelectedReceive((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  };
+
   const handlePasteFromClipboard = async () => {
     try {
       const clip = await navigator.clipboard.readText();
@@ -56,6 +100,19 @@ export default function PasteTradeModal({ onClose }: Props) {
       // as the manual fallback.
     }
   };
+
+  const handleConfirm = () => {
+    // Apply one delta per selected code: give → -1, receive → +1. We rely on
+    // the regular addSticker / removeSticker so the moves debounce-sync to the
+    // DB AND show up in the undo history, just like manual taps on the album.
+    for (const code of selectedGive)    removeSticker(code);
+    for (const code of selectedReceive) addSticker(code);
+    setSelectedGive(new Set());
+    setSelectedReceive(new Set());
+    setDone(true);
+  };
+
+  const hasSelection = selectedGive.size > 0 || selectedReceive.size > 0;
 
   if (!mounted) return null;
 
@@ -76,7 +133,7 @@ export default function PasteTradeModal({ onClose }: Props) {
             Comparar listas
           </h2>
           <p className="text-[12px] text-zinc-500 dark:text-zinc-400 text-center">
-            Pegá las faltantes y repetidas de otra persona — te muestro qué pueden intercambiar.
+            Pegá las faltantes y repetidas de otra persona, marcá las que se cambian y confirmá — tu stock se actualiza.
           </p>
         </div>
 
@@ -111,20 +168,26 @@ export default function PasteTradeModal({ onClose }: Props) {
 
           {parsed && (parsed.missing.length > 0 || parsed.repeated.length > 0) && (
             <div className="mt-4 space-y-3">
-              <ResultBlock
+              <SelectableBlock
                 title="🎁 Le puedo dar"
-                subtitle="Necesita y yo tengo repetidas"
+                subtitle="Necesita y yo tengo repetidas — marcá las que le entregás"
                 codes={matches.iCanGive}
-                color="text-[#00B8D4]"
-                bg="bg-[#00B8D4]/10"
+                selected={selectedGive}
+                onToggle={toggleGive}
+                selectedColor="bg-violet-500 text-white ring-2 ring-violet-500 ring-offset-1"
+                idleColor="bg-violet-100 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400"
+                titleColor="text-violet-500"
                 empty="No tengo nada de lo que necesita."
               />
-              <ResultBlock
+              <SelectableBlock
                 title="🤝 Me puede dar"
-                subtitle="Tiene repetidas y yo no la tengo"
+                subtitle="Tiene repetidas y yo no la tengo — marcá las que recibís"
                 codes={matches.theyCanGive}
-                color="text-violet-500"
-                bg="bg-violet-100 dark:bg-violet-900/20"
+                selected={selectedReceive}
+                onToggle={toggleReceive}
+                selectedColor="bg-[#00B8D4] text-white ring-2 ring-[#00B8D4] ring-offset-1"
+                idleColor="bg-[#00B8D4]/10 text-[#00B8D4]"
+                titleColor="text-[#00B8D4]"
                 empty="No tiene nada de lo que me falta."
               />
               <p className="text-[11px] text-zinc-400 dark:text-zinc-500 text-center">
@@ -138,13 +201,44 @@ export default function PasteTradeModal({ onClose }: Props) {
               No detecté líneas válidas. Asegurate de que tenga secciones &ldquo;Me faltan&rdquo; o &ldquo;Repetidas&rdquo; con códigos tipo MEX-1.
             </p>
           )}
+
+          {done && (
+            <div className="mt-3 bg-green-50 dark:bg-green-900/20 rounded-xl px-3 py-2">
+              <p className="text-[12.5px] text-green-700 dark:text-green-400 font-semibold text-center">
+                ✓ Cambio aplicado. Si te equivocaste, deshacelo desde el historial.
+              </p>
+            </div>
+          )}
         </div>
 
-        {/* Fixed footer */}
-        <div className="flex-shrink-0 px-5 pt-2 pb-5">
+        {/* Fixed footer — confirm bar mirrors the public-cambio sticky bar so
+            the gesture is familiar across both flows. */}
+        <div className="flex-shrink-0 px-5 pt-2 pb-5 border-t border-zinc-100 dark:border-zinc-800">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="flex-1 text-[12px] leading-tight">
+              <span className={selectedReceive.size > 0 ? 'text-[#00B8D4] font-semibold' : 'text-zinc-400 dark:text-zinc-500'}>
+                +{selectedReceive.size} recibís
+              </span>
+              <span className="mx-1.5 text-zinc-300 dark:text-zinc-600">·</span>
+              <span className={selectedGive.size > 0 ? 'text-violet-500 font-semibold' : 'text-zinc-400 dark:text-zinc-500'}>
+                −{selectedGive.size} das
+              </span>
+            </div>
+            <button
+              onClick={handleConfirm}
+              disabled={!hasSelection}
+              className={`px-4 py-2 rounded-xl font-bold text-[13px] transition-colors ${
+                hasSelection
+                  ? 'bg-[#00B8D4] text-white'
+                  : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-400 dark:text-zinc-500 cursor-not-allowed'
+              }`}
+            >
+              🔄 Confirmar
+            </button>
+          </div>
           <button
             onClick={onClose}
-            className="w-full py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-sm font-semibold"
+            className="w-full py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-[13px] font-semibold"
           >
             Cerrar
           </button>
@@ -155,15 +249,34 @@ export default function PasteTradeModal({ onClose }: Props) {
   );
 }
 
-function ResultBlock({
-  title, subtitle, codes, color, bg, empty,
+/* ── Selectable result block ────────────────────────────────────────────────
+   A leaderboard-style list where each code is a toggleable chip. Selection is
+   driven by the parent (controlled), so the confirm bar reads from a single
+   source of truth and can apply the trade atomically. */
+function SelectableBlock({
+  title, subtitle, codes, selected, onToggle, selectedColor, idleColor, titleColor, empty,
 }: {
-  title: string; subtitle: string; codes: string[]; color: string; bg: string; empty: string;
+  title: string;
+  subtitle: string;
+  codes: string[];
+  selected: Set<string>;
+  onToggle: (code: string) => void;
+  selectedColor: string;
+  idleColor: string;
+  titleColor: string;
+  empty: string;
 }) {
   return (
     <div className="bg-white dark:bg-zinc-800 rounded-xl p-3 shadow-sm">
       <div className="flex items-baseline justify-between mb-1">
-        <h3 className={`font-bold text-[13px] ${color}`}>{title}</h3>
+        <h3 className={`font-bold text-[13px] ${titleColor}`}>
+          {title}
+          {selected.size > 0 && (
+            <span className="ml-1.5 text-[11px] font-semibold opacity-80">
+              · {selected.size} seleccionada{selected.size === 1 ? '' : 's'}
+            </span>
+          )}
+        </h3>
         <span className="text-[11px] font-bold text-zinc-400 dark:text-zinc-500">
           {codes.length}
         </span>
@@ -175,20 +288,23 @@ function ResultBlock({
         <div className="flex flex-wrap gap-1">
           {codes.map((code) => {
             const info = STICKER_MAP.get(code);
-            const display = code;
             const sub = info?.section === 'team'
               ? info.teamName
               : info?.section === 'extra'
               ? info.extraPlayerName
               : '';
+            const isSel = selected.has(code);
             return (
-              <span
+              <button
                 key={code}
+                onClick={() => onToggle(code)}
                 title={sub}
-                className={`px-2 py-1 rounded-lg ${bg} ${color} text-[11.5px] font-semibold`}
+                className={`px-2 py-1 rounded-lg text-[11.5px] font-semibold transition-all active:scale-95 ${
+                  isSel ? selectedColor : idleColor
+                }`}
               >
-                {display}
-              </span>
+                {isSel ? '✓ ' : ''}{code}
+              </button>
             );
           })}
         </div>

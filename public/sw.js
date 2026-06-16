@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fichus2026-v23';
+const CACHE_NAME = 'fichus2026-v24';
 const STATIC_ASSETS = [
   '/',
   '/album',
